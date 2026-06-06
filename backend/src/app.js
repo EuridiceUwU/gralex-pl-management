@@ -8,6 +8,7 @@ import swaggerSpec from "./config/swagger.js";
 import healthRoutes from "./routes/health.routes.js";
 import metricsRoutes from "./routes/metrics.routes.js";
 import dbRoutes from "./routes/db.routes.js";
+import employeeRoutes from "./routes/employee.routes.js";
 
 import { notFound } from "./middlewares/notFound.middleware.js";
 
@@ -22,6 +23,7 @@ app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 app.use("/", healthRoutes);
 app.use("/metrics", metricsRoutes);
 app.use("/db", dbRoutes);
+app.use("/employees", employeeRoutes);
 
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
