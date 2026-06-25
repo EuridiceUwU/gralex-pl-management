@@ -1,0 +1,260 @@
+<div class="min-h-screen bg-white text-slate-900">
+  <!-- Navbar -->
+  <header class="sticky top-0 z-30 border-b border-slate-100 bg-white/80 backdrop-blur">
+    <div class="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+      <a class="flex items-center gap-2 text-xl font-extrabold tracking-tight" href="#top">
+        <span class="grid h-9 w-9 place-items-center rounded-xl bg-brand-500 text-white">G</span>
+        <span>Gralex</span>
+      </a>
+      <nav class="hidden items-center gap-8 text-sm font-medium text-slate-600 md:flex">
+        <a class="transition hover:text-brand-600" href="#ahorro">Ahorro</a>
+        <a class="transition hover:text-brand-600" href="#como">Cómo funciona</a>
+        <a class="transition hover:text-brand-600" href="#cotizador">Cotizador</a>
+        <a class="transition hover:text-brand-600" href="#beneficios">Beneficios</a>
+      </nav>
+      <a
+        routerLink="/admin/login"
+        class="rounded-full bg-brand-500 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-600"
+        >Entrar al panel</a
+      >
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section id="top" class="relative overflow-hidden">
+    <div class="pointer-events-none absolute -right-32 -top-32 h-96 w-96 rounded-full bg-brand-100 blur-3xl"></div>
+    <div class="mx-auto grid max-w-6xl items-center gap-12 px-6 py-20 md:grid-cols-2 md:py-28">
+      <div class="animate-fade-up">
+        <span class="inline-flex items-center gap-2 rounded-full bg-brand-50 px-4 py-1.5 text-sm font-medium text-brand-700">
+          🚀 Envíos más baratos, sin complicaciones
+        </span>
+        <h1 class="mt-6 text-4xl font-extrabold leading-tight tracking-tight md:text-6xl">
+          Envía con las mejores paqueterías
+          <span class="text-brand-500">pagando menos</span>
+        </h1>
+        <p class="mt-6 max-w-lg text-lg text-slate-600">
+          Gralex te da tarifas preferenciales en DHL, FedEx y Estafeta. Genera tus
+          guías al instante y ahorra hasta un 60% en cada envío.
+        </p>
+        <div class="mt-8 flex flex-wrap gap-4">
+          <a href="#cotizador" class="rounded-full bg-brand-500 px-7 py-3 text-base font-semibold text-white shadow-lg shadow-brand-500/20 transition hover:bg-brand-600">
+            Cotizar ahora
+          </a>
+          <a routerLink="/admin/login" class="rounded-full border border-slate-200 px-7 py-3 text-base font-semibold text-slate-700 transition hover:border-brand-300 hover:text-brand-600">
+            Acceder al panel
+          </a>
+        </div>
+        <div class="mt-10 flex items-center gap-8 text-sm text-slate-500">
+          <div><span class="block text-2xl font-bold text-slate-900">+50k</span>guías generadas</div>
+          <div><span class="block text-2xl font-bold text-slate-900">60%</span>ahorro promedio</div>
+          <div><span class="block text-2xl font-bold text-slate-900">3</span>paqueterías</div>
+        </div>
+      </div>
+
+      <!-- Hero card -->
+      <div class="animate-fade-up rounded-3xl border border-slate-100 bg-white p-6 shadow-2xl shadow-slate-200/60">
+        <p class="text-sm font-semibold text-slate-500">Comparativa de envío · 3 kg nacional</p>
+        <div class="mt-4 space-y-3">
+          @for (c of carriers; track c.name) {
+            <div class="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
+              <div class="flex items-center gap-3">
+                <span class="h-3 w-3 rounded-full" [style.background]="c.color"></span>
+                <span class="font-medium">{{ c.name }} en mostrador</span>
+              </div>
+              <span class="font-semibold text-slate-400 line-through">\${{ c.theirPrice }}</span>
+            </div>
+          }
+          <div class="flex items-center justify-between rounded-xl bg-brand-500 px-4 py-4 text-white">
+            <span class="font-semibold">Con Gralex</span>
+            <span class="text-xl font-extrabold">$149</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Savings comparison -->
+  <section id="ahorro" class="bg-slate-50 py-20">
+    <div class="mx-auto max-w-6xl px-6">
+      <h2 class="text-center text-3xl font-bold md:text-4xl">Mira cuánto ahorras</h2>
+      <p class="mx-auto mt-4 max-w-2xl text-center text-slate-600">
+        Las mismas paqueterías de siempre, a una fracción del precio de mostrador.
+      </p>
+      <div class="mt-12 grid gap-6 md:grid-cols-3">
+        @for (c of carriers; track c.name) {
+          <div class="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-lg">
+            <div class="flex items-center gap-3">
+              <span class="h-4 w-4 rounded-full" [style.background]="c.color"></span>
+              <h3 class="text-lg font-bold">{{ c.name }}</h3>
+            </div>
+            <p class="mt-6 text-sm text-slate-500">Mostrador</p>
+            <p class="text-2xl font-semibold text-slate-400 line-through">\${{ c.theirPrice }}</p>
+            <p class="mt-4 text-sm text-slate-500">Con Gralex</p>
+            <p class="text-4xl font-extrabold text-brand-500">\${{ (c.theirPrice * 0.45).toFixed(0) }}</p>
+            <p class="mt-4 inline-block rounded-full bg-brand-50 px-3 py-1 text-sm font-semibold text-brand-700">
+              Ahorras ~55%
+            </p>
+          </div>
+        }
+      </div>
+    </div>
+  </section>
+
+  <!-- How it works -->
+  <section id="como" class="py-20">
+    <div class="mx-auto max-w-6xl px-6">
+      <h2 class="text-center text-3xl font-bold md:text-4xl">Así de fácil funciona</h2>
+      <div class="mt-12 grid gap-8 md:grid-cols-3">
+        @for (s of steps; track s.n) {
+          <div class="relative rounded-2xl border border-slate-100 p-8 text-center">
+            <span class="mx-auto grid h-14 w-14 place-items-center rounded-full bg-brand-500 text-2xl font-bold text-white">
+              {{ s.n }}
+            </span>
+            <h3 class="mt-6 text-xl font-bold">{{ s.title }}</h3>
+            <p class="mt-3 text-slate-600">{{ s.text }}</p>
+          </div>
+        }
+      </div>
+    </div>
+  </section>
+
+  <!-- Carriers -->
+  <section class="bg-slate-50 py-16">
+    <div class="mx-auto max-w-6xl px-6 text-center">
+      <p class="text-sm font-semibold uppercase tracking-wider text-slate-400">
+        Trabajamos con las mejores paqueterías
+      </p>
+      <div class="mt-8 flex flex-wrap items-center justify-center gap-x-12 gap-y-6">
+        @for (c of carriers; track c.name) {
+          <span class="text-2xl font-extrabold tracking-tight" [style.color]="c.color">{{ c.name }}</span>
+        }
+      </div>
+    </div>
+  </section>
+
+  <!-- Quote calculator -->
+  <section id="cotizador" class="py-20">
+    <div class="mx-auto max-w-4xl px-6">
+      <div class="overflow-hidden rounded-3xl border border-slate-100 shadow-xl md:grid md:grid-cols-2">
+        <div class="bg-white p-8">
+          <h2 class="text-2xl font-bold">Cotizador rápido</h2>
+          <p class="mt-2 text-sm text-slate-500">Calcula tu ahorro estimado en segundos.</p>
+
+          <label class="mt-8 block text-sm font-medium text-slate-700">
+            Peso del paquete: <span class="font-bold text-brand-600">{{ weight() }} kg</span>
+          </label>
+          <input
+            type="range"
+            min="1"
+            max="30"
+            [value]="weight()"
+            (input)="setWeight($any($event.target).value)"
+            class="mt-3 w-full accent-brand-500"
+          />
+
+          <p class="mt-6 text-sm font-medium text-slate-700">Tipo de envío</p>
+          <div class="mt-3 grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              (click)="distance.set('local')"
+              [class]="distance() === 'local'
+                ? 'rounded-xl border-2 border-brand-500 bg-brand-50 py-2 font-semibold text-brand-700'
+                : 'rounded-xl border border-slate-200 py-2 font-medium text-slate-600'"
+            >
+              Local
+            </button>
+            <button
+              type="button"
+              (click)="distance.set('nacional')"
+              [class]="distance() === 'nacional'
+                ? 'rounded-xl border-2 border-brand-500 bg-brand-50 py-2 font-semibold text-brand-700'
+                : 'rounded-xl border border-slate-200 py-2 font-medium text-slate-600'"
+            >
+              Nacional
+            </button>
+          </div>
+        </div>
+
+        <div class="flex flex-col justify-center bg-brand-500 p-8 text-white">
+          <p class="text-sm font-medium text-brand-100">Precio en mostrador</p>
+          <p class="text-2xl font-semibold text-brand-100 line-through">\${{ marketPrice() }}</p>
+          <p class="mt-6 text-sm font-medium text-brand-100">Tu precio con Gralex</p>
+          <p class="text-5xl font-extrabold">\${{ gralexPrice() }}</p>
+          <div class="mt-6 rounded-2xl bg-white/15 p-4">
+            <p class="text-lg font-bold">Ahorras \${{ savings() }}</p>
+            <p class="text-sm text-brand-100">Un {{ savingsPct() }}% menos por envío</p>
+          </div>
+          <a routerLink="/admin/login" class="mt-6 rounded-full bg-white py-3 text-center font-semibold text-brand-600 transition hover:bg-brand-50">
+            Generar mi guía
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Benefits -->
+  <section id="beneficios" class="bg-slate-50 py-20">
+    <div class="mx-auto max-w-6xl px-6">
+      <h2 class="text-center text-3xl font-bold md:text-4xl">¿Por qué elegir Gralex?</h2>
+      <div class="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        @for (b of benefits; track b.title) {
+          <div class="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-lg">
+            <span class="text-3xl">{{ b.icon }}</span>
+            <h3 class="mt-4 text-lg font-bold">{{ b.title }}</h3>
+            <p class="mt-2 text-sm text-slate-600">{{ b.text }}</p>
+          </div>
+        }
+      </div>
+    </div>
+  </section>
+
+  <!-- Testimonials -->
+  <section class="py-20">
+    <div class="mx-auto max-w-6xl px-6">
+      <h2 class="text-center text-3xl font-bold md:text-4xl">Lo que dicen nuestros clientes</h2>
+      <div class="mt-12 grid gap-6 md:grid-cols-3">
+        @for (t of testimonials; track t.name) {
+          <figure class="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+            <p class="text-slate-700">“{{ t.text }}”</p>
+            <figcaption class="mt-6 flex items-center gap-3">
+              <span class="grid h-10 w-10 place-items-center rounded-full bg-brand-100 font-bold text-brand-700">
+                {{ t.name.charAt(0) }}
+              </span>
+              <span>
+                <span class="block font-semibold">{{ t.name }}</span>
+                <span class="block text-sm text-slate-500">{{ t.role }}</span>
+              </span>
+            </figcaption>
+          </figure>
+        }
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="bg-brand-500 py-16">
+    <div class="mx-auto max-w-4xl px-6 text-center text-white">
+      <h2 class="text-3xl font-bold md:text-4xl">Empieza a ahorrar en tus envíos hoy</h2>
+      <p class="mt-4 text-brand-100">Crea tu cuenta y genera tu primera guía en minutos.</p>
+      <a routerLink="/admin/login" class="mt-8 inline-block rounded-full bg-white px-8 py-3 font-semibold text-brand-600 transition hover:bg-brand-50">
+        Comenzar ahora
+      </a>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="border-t border-slate-100 bg-white py-12">
+    <div class="mx-auto flex max-w-6xl flex-col items-center justify-between gap-6 px-6 md:flex-row">
+      <div class="flex items-center gap-2 font-extrabold">
+        <span class="grid h-8 w-8 place-items-center rounded-lg bg-brand-500 text-white">G</span>
+        Gralex
+      </div>
+      <p class="text-sm text-slate-500">© 2026 Gralex. Envíos a menor costo.</p>
+      <div class="flex gap-6 text-sm text-slate-500">
+        <a class="hover:text-brand-600" href="#">Términos</a>
+        <a class="hover:text-brand-600" href="#">Privacidad</a>
+        <a class="hover:text-brand-600" href="#">Contacto</a>
+      </div>
+    </div>
+  </footer>
+</div>
