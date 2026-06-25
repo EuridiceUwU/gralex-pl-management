@@ -186,3 +186,498 @@ CREATE INDEX "idx_accounts_minio" ON "Accounts" ("minio_id");
 CREATE INDEX "idx_records_user_id" ON "Records" ("user_id");
 CREATE INDEX "idx_records_date" ON "Records" ("date");
 CREATE INDEX "idx_minio_docs_uploaded_by" ON "Minio_documents" ("uploaded_by");
+
+-- ============================================================================
+--  Extensions
+-- ============================================================================
+-- pgcrypto provides crypt()/gen_salt() so we can store a bcrypt password hash
+-- straight from the seed. bcrypt hashes produced here ($2a$) are verifiable by
+-- the backend's bcryptjs.
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- ============================================================================
+--  Views  (consumed by the backend for dashboards / detailed listings)
+-- ============================================================================
+CREATE OR REPLACE VIEW "vw_employees_detail" AS
+SELECT e."employee_id",
+       e."name",
+       e."email",
+       e."phone",
+       e."rest_days",
+       e."status",
+       e."created_at",
+       e."role_id",
+       r."role_name"
+FROM "Employees" e
+JOIN "Roles" r ON r."role_id" = e."role_id";
+
+CREATE OR REPLACE VIEW "vw_shipments_detail" AS
+SELECT s."shipment_id",
+       s."tracking_num",
+       s."sender_name",
+       s."receiver_name",
+       s."sender_cp",
+       s."receiver_cp",
+       s."weight",
+       s."service",
+       s."creation_date",
+       s."cost",
+       s."price",
+       (COALESCE(s."price", 0) - COALESCE(s."cost", 0)) AS "margin",
+       s."created_at",
+       s."customer_id",
+       c."name"        AS "customer_name",
+       s."supplier_id",
+       sup."name"      AS "supplier_name",
+       s."ss_id",
+       st."ss_name"    AS "status_name",
+       s."minio_id",
+       m."minio_key"
+FROM "Shipments" s
+JOIN "Customers" c        ON c."customer_id" = s."customer_id"
+JOIN "Suppliers" sup      ON sup."supplier_id" = s."supplier_id"
+JOIN "Shipments_status" st ON st."ss_id" = s."ss_id"
+LEFT JOIN "Minio_documents" m ON m."minio_id" = s."minio_id";
+
+CREATE OR REPLACE VIEW "vw_dashboard_metrics" AS
+SELECT
+    (SELECT COUNT(*) FROM "Shipments")                              AS "total_shipments",
+    COALESCE((SELECT SUM("price") FROM "Shipments"), 0)            AS "total_revenue",
+    COALESCE((SELECT SUM("cost") FROM "Shipments"), 0)             AS "total_cost",
+    COALESCE((SELECT SUM("price" - "cost") FROM "Shipments"), 0)   AS "total_margin",
+    (SELECT COUNT(*) FROM "Customers" WHERE "status")              AS "total_customers",
+    (SELECT COUNT(*) FROM "Suppliers" WHERE "status")              AS "total_suppliers",
+    (SELECT COUNT(*) FROM "Employees" WHERE "status")              AS "total_employees";
+
+CREATE OR REPLACE VIEW "vw_shipments_by_supplier" AS
+SELECT sup."supplier_id",
+       sup."name" AS "supplier_name",
+       COUNT(s."shipment_id")                  AS "total",
+       COALESCE(SUM(s."price"), 0)             AS "revenue"
+FROM "Suppliers" sup
+LEFT JOIN "Shipments" s ON s."supplier_id" = sup."supplier_id"
+GROUP BY sup."supplier_id", sup."name"
+ORDER BY sup."supplier_id";
+
+CREATE OR REPLACE VIEW "vw_shipments_by_status" AS
+SELECT st."ss_id",
+       st."ss_name",
+       COUNT(s."shipment_id") AS "total"
+FROM "Shipments_status" st
+LEFT JOIN "Shipments" s ON s."ss_id" = st."ss_id"
+GROUP BY st."ss_id", st."ss_name"
+ORDER BY st."ss_id";
+
+CREATE OR REPLACE VIEW "vw_users_detail" AS
+SELECT u."user_id",
+       u."employee_id",
+       u."email",
+       u."password",
+       u."status",
+       u."created_at",
+       e."name",
+       r."role_id",
+       r."role_name"
+FROM "Users" u
+JOIN "Employees" e ON e."employee_id" = u."employee_id"
+JOIN "Roles" r     ON r."role_id" = e."role_id";
+
+-- ============================================================================
+--  Audit trigger. Every sp_*_create/update/delete procedure below sets the
+--  acting user with set_config('app.current_user_id', ..., true) right before
+--  its INSERT/UPDATE; this trigger reads that session-local value and writes
+--  the "Records" row automatically, so no procedure body has to do it by hand.
+--  If no actor is set (e.g. the bootstrap seed below, which runs raw INSERTs)
+--  nothing is logged — "Records"."user_id" stays NOT NULL and trustworthy.
+-- ============================================================================
+CREATE OR REPLACE FUNCTION fn_audit_log() RETURNS trigger AS $$
+DECLARE
+    v_user_id    int;
+    v_action     action;
+    v_pk_column  text := TG_ARGV[0];
+    v_record_ref int;
+BEGIN
+    v_user_id := NULLIF(current_setting('app.current_user_id', true), '')::int;
+
+    IF v_user_id IS NULL THEN
+        RETURN NEW;
+    END IF;
+
+    IF TG_OP = 'INSERT' THEN
+        v_record_ref := (to_jsonb(NEW) ->> v_pk_column)::int;
+        INSERT INTO "Records" ("user_id", "action", "table_name", "record_ref", "old_values", "new_values")
+        VALUES (v_user_id, 'Agregó', TG_TABLE_NAME, v_record_ref, NULL, (to_jsonb(NEW) - 'password')::json);
+    ELSIF TG_OP = 'UPDATE' THEN
+        v_record_ref := (to_jsonb(NEW) ->> v_pk_column)::int;
+        v_action := CASE
+            WHEN (to_jsonb(OLD) ->> 'status') = 'true' AND (to_jsonb(NEW) ->> 'status') = 'false'
+                THEN 'Eliminó'::action
+            ELSE 'Editó'::action
+        END;
+        INSERT INTO "Records" ("user_id", "action", "table_name", "record_ref", "old_values", "new_values")
+        VALUES (v_user_id, v_action, TG_TABLE_NAME, v_record_ref,
+                (to_jsonb(OLD) - 'password')::json, (to_jsonb(NEW) - 'password')::json);
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_users_audit     AFTER INSERT OR UPDATE ON "Users"     FOR EACH ROW EXECUTE FUNCTION fn_audit_log('user_id');
+CREATE TRIGGER trg_roles_audit     AFTER INSERT OR UPDATE ON "Roles"     FOR EACH ROW EXECUTE FUNCTION fn_audit_log('role_id');
+CREATE TRIGGER trg_employees_audit AFTER INSERT OR UPDATE ON "Employees" FOR EACH ROW EXECUTE FUNCTION fn_audit_log('employee_id');
+CREATE TRIGGER trg_suppliers_audit AFTER INSERT OR UPDATE ON "Suppliers" FOR EACH ROW EXECUTE FUNCTION fn_audit_log('supplier_id');
+CREATE TRIGGER trg_customers_audit AFTER INSERT OR UPDATE ON "Customers" FOR EACH ROW EXECUTE FUNCTION fn_audit_log('customer_id');
+CREATE TRIGGER trg_shipments_audit AFTER INSERT OR UPDATE ON "Shipments" FOR EACH ROW EXECUTE FUNCTION fn_audit_log('shipment_id');
+CREATE TRIGGER trg_documents_audit AFTER INSERT ON "Minio_documents"     FOR EACH ROW EXECUTE FUNCTION fn_audit_log('minio_id');
+
+-- ============================================================================
+--  Stored procedures. All writes (create/update/delete) go through these real
+--  PostgreSQL procedures, invoked with CALL. Reads (list/get) are NOT wrapped
+--  in functions: the backend queries the views/tables directly, and reuses
+--  those same SELECTs to re-fetch the row after a CALL, since these
+--  procedures don't return the row themselves. create procedures have a
+--  single OUT new_id so the backend knows which row to re-fetch; update and
+--  delete procedures are void (CALL needs zero NULL placeholders for them).
+--  update procedures use COALESCE so the backend can send NULL for any field
+--  it doesn't want to change (partial update). Each procedure calls
+--  set_config(...) with the acting user before writing, which fn_audit_log()
+--  picks up to log the change into "Records" automatically.
+-- ============================================================================
+
+-- ---- Auth / Users ----------------------------------------------------------
+CREATE OR REPLACE PROCEDURE sp_user_create(
+    p_employee_id int,
+    p_email       varchar,
+    p_password    text,
+    p_created_by  int
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    PERFORM set_config('app.current_user_id', p_created_by::text, true);
+
+    INSERT INTO "Users" ("employee_id", "email", "password")
+    VALUES (p_employee_id, p_email, p_password);
+END;
+$$;
+
+-- ---- Roles -----------------------------------------------------------------
+CREATE OR REPLACE PROCEDURE sp_role_create(
+    p_created_by  int,
+    p_role_name   varchar,
+    p_salary      numeric,
+    p_description varchar,
+    OUT new_id    int
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    PERFORM set_config('app.current_user_id', p_created_by::text, true);
+
+    INSERT INTO "Roles" ("created_by", "role_name", "salary", "description")
+    VALUES (p_created_by, p_role_name, p_salary, p_description)
+    RETURNING "role_id" INTO new_id;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE sp_role_update(
+    p_id          int,
+    p_role_name   varchar,
+    p_salary      numeric,
+    p_description varchar,
+    p_status      boolean,
+    p_user_id     int
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    PERFORM set_config('app.current_user_id', p_user_id::text, true);
+
+    UPDATE "Roles"
+    SET "role_name" = COALESCE(p_role_name, "role_name"),
+        "salary" = COALESCE(p_salary, "salary"),
+        "description" = COALESCE(p_description, "description"),
+        "status" = COALESCE(p_status, "status")
+    WHERE "role_id" = p_id;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE sp_role_delete(p_id int, p_user_id int)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    PERFORM set_config('app.current_user_id', p_user_id::text, true);
+    UPDATE "Roles" SET "status" = false WHERE "role_id" = p_id;
+END;
+$$;
+
+-- ---- Employees -------------------------------------------------------------
+CREATE OR REPLACE PROCEDURE sp_employee_create(
+    p_created_by int,
+    p_role_id    int,
+    p_name       varchar,
+    p_rest_days  text[],
+    p_phone      varchar,
+    p_email      varchar,
+    OUT new_id   int
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    PERFORM set_config('app.current_user_id', p_created_by::text, true);
+
+    INSERT INTO "Employees" ("created_by", "role_id", "name", "rest_days", "phone", "email")
+    VALUES (p_created_by, p_role_id, p_name, p_rest_days, p_phone, p_email)
+    RETURNING "employee_id" INTO new_id;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE sp_employee_update(
+    p_id        int,
+    p_role_id   int,
+    p_name      varchar,
+    p_rest_days text[],
+    p_phone     varchar,
+    p_email     varchar,
+    p_status    boolean,
+    p_user_id   int
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    PERFORM set_config('app.current_user_id', p_user_id::text, true);
+
+    UPDATE "Employees"
+    SET "role_id" = COALESCE(p_role_id, "role_id"),
+        "name" = COALESCE(p_name, "name"),
+        "rest_days" = COALESCE(p_rest_days, "rest_days"),
+        "phone" = COALESCE(p_phone, "phone"),
+        "email" = COALESCE(p_email, "email"),
+        "status" = COALESCE(p_status, "status")
+    WHERE "employee_id" = p_id;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE sp_employee_delete(p_id int, p_user_id int)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    PERFORM set_config('app.current_user_id', p_user_id::text, true);
+    UPDATE "Employees" SET "status" = false WHERE "employee_id" = p_id;
+END;
+$$;
+
+-- ---- Suppliers -------------------------------------------------------------
+CREATE OR REPLACE PROCEDURE sp_supplier_create(
+    p_created_by    int,
+    p_name          varchar,
+    p_credit_amount numeric,
+    p_rfc           varchar,
+    p_phone         varchar,
+    p_email         varchar,
+    OUT new_id      int
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    PERFORM set_config('app.current_user_id', p_created_by::text, true);
+
+    INSERT INTO "Suppliers" ("created_by", "name", "credit_amount", "rfc", "phone", "email")
+    VALUES (p_created_by, p_name, p_credit_amount, p_rfc, p_phone, p_email)
+    RETURNING "supplier_id" INTO new_id;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE sp_supplier_update(
+    p_id            int,
+    p_name          varchar,
+    p_credit_amount numeric,
+    p_rfc           varchar,
+    p_phone         varchar,
+    p_email         varchar,
+    p_status        boolean,
+    p_user_id       int
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    PERFORM set_config('app.current_user_id', p_user_id::text, true);
+
+    UPDATE "Suppliers"
+    SET "name" = COALESCE(p_name, "name"),
+        "credit_amount" = COALESCE(p_credit_amount, "credit_amount"),
+        "rfc" = COALESCE(p_rfc, "rfc"),
+        "phone" = COALESCE(p_phone, "phone"),
+        "email" = COALESCE(p_email, "email"),
+        "status" = COALESCE(p_status, "status")
+    WHERE "supplier_id" = p_id;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE sp_supplier_delete(p_id int, p_user_id int)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    PERFORM set_config('app.current_user_id', p_user_id::text, true);
+    UPDATE "Suppliers" SET "status" = false WHERE "supplier_id" = p_id;
+END;
+$$;
+
+-- ---- Customers -------------------------------------------------------------
+CREATE OR REPLACE PROCEDURE sp_customer_create(
+    p_created_by            int,
+    p_constancy_document_id int,
+    p_name                  varchar,
+    p_company_name          varchar,
+    p_cp                    varchar,
+    p_rfc                   varchar,
+    p_phone                 varchar,
+    p_email                 varchar,
+    p_cfdi                  varchar,
+    OUT new_id              int
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    PERFORM set_config('app.current_user_id', p_created_by::text, true);
+
+    INSERT INTO "Customers" ("created_by", "constancy_document_id", "name", "company_name", "cp", "rfc", "phone", "email", "cfdi")
+    VALUES (p_created_by, p_constancy_document_id, p_name, p_company_name, p_cp, p_rfc, p_phone, p_email, p_cfdi)
+    RETURNING "customer_id" INTO new_id;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE sp_customer_update(
+    p_id           int,
+    p_name         varchar,
+    p_company_name varchar,
+    p_cp           varchar,
+    p_rfc          varchar,
+    p_phone        varchar,
+    p_email        varchar,
+    p_cfdi         varchar,
+    p_status       boolean,
+    p_user_id      int
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    PERFORM set_config('app.current_user_id', p_user_id::text, true);
+
+    UPDATE "Customers"
+    SET "name" = COALESCE(p_name, "name"),
+        "company_name" = COALESCE(p_company_name, "company_name"),
+        "cp" = COALESCE(p_cp, "cp"),
+        "rfc" = COALESCE(p_rfc, "rfc"),
+        "phone" = COALESCE(p_phone, "phone"),
+        "email" = COALESCE(p_email, "email"),
+        "cfdi" = COALESCE(p_cfdi, "cfdi"),
+        "status" = COALESCE(p_status, "status")
+    WHERE "customer_id" = p_id;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE sp_customer_delete(p_id int, p_user_id int)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    PERFORM set_config('app.current_user_id', p_user_id::text, true);
+    UPDATE "Customers" SET "status" = false WHERE "customer_id" = p_id;
+END;
+$$;
+
+-- ---- Shipments -------------------------------------------------------------
+CREATE OR REPLACE PROCEDURE sp_shipment_create(
+    p_ss_id         int,
+    p_created_by    int,
+    p_supplier_id   int,
+    p_customer_id   int,
+    p_minio_id      int,
+    p_tracking_num  varchar,
+    p_sender_name   varchar,
+    p_receiver_name varchar,
+    p_sender_cp     varchar,
+    p_receiver_cp   varchar,
+    p_weight        varchar,
+    p_service       varchar,
+    p_creation_date date,
+    p_cost          numeric,
+    p_price         numeric,
+    OUT new_id      int
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    PERFORM set_config('app.current_user_id', p_created_by::text, true);
+
+    INSERT INTO "Shipments" (
+        "ss_id", "created_by", "supplier_id", "customer_id", "minio_id",
+        "tracking_num", "sender_name", "receiver_name", "sender_cp", "receiver_cp",
+        "weight", "service", "creation_date", "cost", "price"
+    ) VALUES (
+        p_ss_id, p_created_by, p_supplier_id, p_customer_id, p_minio_id,
+        p_tracking_num, p_sender_name, p_receiver_name, p_sender_cp, p_receiver_cp,
+        p_weight, p_service, p_creation_date, p_cost, p_price
+    )
+    RETURNING "shipment_id" INTO new_id;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE sp_shipment_update_status(p_id int, p_ss_id int, p_user_id int)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    PERFORM set_config('app.current_user_id', p_user_id::text, true);
+    UPDATE "Shipments" SET "ss_id" = p_ss_id WHERE "shipment_id" = p_id;
+END;
+$$;
+
+-- ---- Documents (MinIO references) -----------------------------------------
+CREATE OR REPLACE PROCEDURE sp_document_create(
+    p_document_type document_type,
+    p_uploaded_by   int,
+    p_minio_key     varchar,
+    p_notes         text,
+    OUT new_id      int
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    PERFORM set_config('app.current_user_id', p_uploaded_by::text, true);
+
+    INSERT INTO "Minio_documents" ("document_type", "uploaded_by", "minio_key", "notes")
+    VALUES (p_document_type, p_uploaded_by, p_minio_key, p_notes)
+    RETURNING "minio_id" INTO new_id;
+END;
+$$;
+
+-- ============================================================================
+--  Seed data
+-- ============================================================================
+-- Shipment statuses
+INSERT INTO "Shipments_status" ("ss_name")
+SELECT v
+FROM (VALUES ('Pendiente'), ('En tránsito'), ('Entregado'), ('Cancelado')) AS t(v)
+WHERE NOT EXISTS (SELECT 1 FROM "Shipments_status" s WHERE s."ss_name" = t.v);
+
+-- Bootstrap administrator: Role -> Employee -> User.
+-- The login user is admin@gralex.com / admin123 (bcrypt hash via pgcrypto).
+DO $$
+DECLARE
+    v_role_id int;
+    v_employee_id int;
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM "Users" WHERE "email" = 'admin@gralex.com') THEN
+        INSERT INTO "Roles" ("role_name", "salary", "description")
+        VALUES ('Administrador', 0, 'Acceso total al panel administrativo')
+        RETURNING "role_id" INTO v_role_id;
+
+        INSERT INTO "Employees" ("role_id", "name", "email", "phone")
+        VALUES (v_role_id, 'Administrador Gralex', 'admin.empleado@gralex.com', '0000000000')
+        RETURNING "employee_id" INTO v_employee_id;
+
+        INSERT INTO "Users" ("employee_id", "email", "password")
+        VALUES (v_employee_id, 'admin@gralex.com', crypt('admin123', gen_salt('bf', 10)));
+    END IF;
+END $$;
