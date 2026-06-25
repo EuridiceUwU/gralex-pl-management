@@ -1,0 +1,117 @@
+<div class="flex items-center justify-between">
+  <div>
+    <h2 class="text-2xl font-bold">Guías</h2>
+    <p class="text-sm text-slate-500">Listado y registro de envíos.</p>
+  </div>
+  <button
+    (click)="showForm.set(!showForm())"
+    class="rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-600"
+  >
+    {{ showForm() ? 'Cerrar' : '+ Nueva guía' }}
+  </button>
+</div>
+
+@if (showForm()) {
+  <form #f="ngForm" (ngSubmit)="save()" class="mt-6 grid gap-4 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm md:grid-cols-3">
+    <label class="text-sm">
+      <span class="font-medium text-slate-700">Proveedor</span>
+      <select name="supplierId" #supplierRef="ngModel" [(ngModel)]="form.supplierId" required class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
+        <option [ngValue]="null" disabled>Selecciona…</option>
+        @for (s of suppliers(); track s.supplier_id) {
+          <option [ngValue]="s.supplier_id">{{ s.name }}</option>
+        }
+      </select>
+      <app-field-error [field]="supplierRef" />
+    </label>
+    <label class="text-sm">
+      <span class="font-medium text-slate-700">Cliente</span>
+      <select name="customerId" #customerRef="ngModel" [(ngModel)]="form.customerId" required class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
+        <option [ngValue]="null" disabled>Selecciona…</option>
+        @for (c of customers(); track c.customer_id) {
+          <option [ngValue]="c.customer_id">{{ c.name }}</option>
+        }
+      </select>
+      <app-field-error [field]="customerRef" />
+    </label>
+    <label class="text-sm">
+      <span class="font-medium text-slate-700">Estado</span>
+      <select name="ssId" #statusRef="ngModel" [(ngModel)]="form.ssId" required class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
+        <option [ngValue]="null" disabled>Selecciona…</option>
+        @for (st of statuses(); track st.ss_id) {
+          <option [ngValue]="st.ss_id">{{ st.ss_name }}</option>
+        }
+      </select>
+      <app-field-error [field]="statusRef" />
+    </label>
+    <label class="text-sm">
+      <span class="font-medium text-slate-700">No. de guía</span>
+      <input name="trackingNum" #trackingRef="ngModel" [(ngModel)]="form.trackingNum" required minlength="4" maxlength="40" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
+      <app-field-error [field]="trackingRef" />
+    </label>
+    <label class="text-sm">
+      <span class="font-medium text-slate-700">Destinatario</span>
+      <input name="receiverName" #receiverRef="ngModel" [(ngModel)]="form.receiverName" maxlength="30" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
+      <app-field-error [field]="receiverRef" />
+    </label>
+    <label class="text-sm">
+      <span class="font-medium text-slate-700">CP destino</span>
+      <input name="receiverCp" #cpRef="ngModel" [(ngModel)]="form.receiverCp" pattern="\d{5}" maxlength="5" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
+      <app-field-error [field]="cpRef" patternMessage="Deben ser 5 dígitos." />
+    </label>
+    <label class="text-sm">
+      <span class="font-medium text-slate-700">Peso (kg)</span>
+      <input name="weight" #weightRef="ngModel" [(ngModel)]="form.weight" maxlength="7" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
+      <app-field-error [field]="weightRef" />
+    </label>
+    <label class="text-sm">
+      <span class="font-medium text-slate-700">Costo</span>
+      <input name="cost" type="number" #costRef="ngModel" [(ngModel)]="form.cost" min="0" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
+      <app-field-error [field]="costRef" />
+    </label>
+    <label class="text-sm">
+      <span class="font-medium text-slate-700">Precio</span>
+      <input name="price" type="number" #priceRef="ngModel" [(ngModel)]="form.price" min="0" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
+      <app-field-error [field]="priceRef" />
+    </label>
+    <div class="md:col-span-3">
+      <button type="submit" [disabled]="saving() || f.invalid" class="rounded-xl bg-brand-500 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:opacity-60">
+        {{ saving() ? 'Guardando…' : 'Guardar guía' }}
+      </button>
+    </div>
+  </form>
+}
+
+<div class="mt-6 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
+  @if (loading()) {
+    <p class="p-6 text-slate-500">Cargando…</p>
+  } @else {
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+        <tr>
+          <th class="px-4 py-3">Guía</th>
+          <th class="px-4 py-3">Cliente</th>
+          <th class="px-4 py-3">Proveedor</th>
+          <th class="px-4 py-3">Estado</th>
+          <th class="px-4 py-3">Peso</th>
+          <th class="px-4 py-3 text-right">Precio</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        @for (s of shipments(); track s.shipment_id) {
+          <tr class="transition hover:bg-slate-50">
+            <td class="px-4 py-3 font-medium text-slate-800">{{ s.tracking_num }}</td>
+            <td class="px-4 py-3">{{ s.customer_name }}</td>
+            <td class="px-4 py-3">{{ s.supplier_name }}</td>
+            <td class="px-4 py-3">
+              <span class="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700">{{ s.status_name }}</span>
+            </td>
+            <td class="px-4 py-3">{{ s.weight || '—' }}</td>
+            <td class="px-4 py-3 text-right font-semibold">{{ s.price ? ('$' + (s.price | number: '1.2-2')) : '—' }}</td>
+          </tr>
+        } @empty {
+          <tr><td colspan="6" class="px-4 py-8 text-center text-slate-400">No hay guías registradas.</td></tr>
+        }
+      </tbody>
+    </table>
+  }
+</div>
