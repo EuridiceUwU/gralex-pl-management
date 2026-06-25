@@ -1,8 +1,11 @@
 import { Router } from "express";
 
 import * as EmployeeController from "../controllers/employee.controller.js";
+import { requireAuth } from "../middlewares/auth.middleware.js";
 
 const router = Router();
+
+router.use(requireAuth);
 
 /**
  * @swagger
@@ -13,9 +16,15 @@ const router = Router();
 
 /**
  * @swagger
- * /employees/new-employee:
+ * /employees:
+ *   get:
+ *     summary: Lista todos los empleados
+ *     tags: [Employees]
+ *     responses:
+ *       200:
+ *         description: Lista de empleados
  *   post:
- *     summary: Registrar un nuevo empleado
+ *     summary: Registrar un nuevo empleado (con usuario opcional)
  *     tags: [Employees]
  *     requestBody:
  *       required: true
@@ -23,137 +32,63 @@ const router = Router();
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - name
- *               - email
- *               - password
- *               - role
+ *             required: [roleId, name, email]
  *             properties:
- *               name:
- *                 type: string
- *                 description: Nombre completo del empleado
- *                 example: Juan Pérez
- *               email:
- *                 type: string
- *                 format: email
- *                 description: Correo electrónico único del empleado
- *                 example: juan.perez@example.com
- *               password:
- *                 type: string
- *                 format: password
- *                 description: Contraseña de acceso
- *                 example: password123
- *               role:
- *                 type: string
- *                 description: Rol asignado al empleado en la plataforma
- *                 example: Administrador
+ *               roleId: { type: integer, example: 1 }
+ *               name: { type: string, example: Juan Pérez }
+ *               email: { type: string, example: juan.perez@gralex.com }
+ *               phone: { type: string, example: "5512345678" }
+ *               restDays:
+ *                 type: array
+ *                 items: { type: string }
+ *                 example: ["Sábado", "Domingo"]
+ *               password: { type: string, example: secret123 }
  *     responses:
  *       201:
- *         description: Empleado registrado exitosamente
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 ok:
- *                   type: boolean
- *                   example: true
- *                 message:
- *                   type: string
- *                   example: Empleado registrado exitosamente
- *                 employee:
- *                   type: object
- *                   properties:
- *                     id:
- *                       type: integer
- *                       description: ID autogenerado del empleado
- *                       example: 1
- *                     name:
- *                       type: string
- *                       example: Juan Pérez
- *                     email:
- *                       type: string
- *                       example: juan.perez@example.com
- *                     role:
- *                       type: string
- *                       example: Administrador
+ *         description: Empleado registrado
  *       400:
- *         description: Petición incorrecta por falta de campos obligatorios
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 ok:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: Todos los campos son obligatorios
- *       500:
- *         description: Error interno del servidor al procesar el registro
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 ok:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: Error al registrar empleado
+ *         description: Faltan campos obligatorios
  */
-router.post("/new-employee", EmployeeController.newEmployee);
+router.get("/", EmployeeController.allEmployees);
+router.post("/", EmployeeController.newEmployee);
 
 /**
  * @swagger
- * /employees/all-employees:
+ * /employees/{id}:
  *   get:
- *     summary: Obtiene la lista de todos los empleados
+ *     summary: Obtener un empleado por ID
  *     tags: [Employees]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
  *     responses:
- *       200:
- *         description: Lista de empleados obtenida exitosamente
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 ok:
- *                   type: boolean
- *                   example: true
- *                 employees:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       id:
- *                         type: integer
- *                         example: 1
- *                       name:
- *                         type: string
- *                         example: Juan Pérez
- *                       email:
- *                         type: string
- *                         example: juan.perez@example.com
- *                       role:
- *                         type: string
- *                         example: Administrador
- *       500:
- *         description: Error interno del servidor al consultar la lista de empleados
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 ok:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: Error al consultar la lista de empleados
+ *       200: { description: Empleado encontrado }
+ *       404: { description: No encontrado }
+ *   put:
+ *     summary: Actualizar un empleado
+ *     tags: [Employees]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200: { description: Empleado actualizado }
+ *   delete:
+ *     summary: Dar de baja un empleado
+ *     tags: [Employees]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200: { description: Empleado dado de baja }
  */
-router.get("/all-employees", EmployeeController.allEmployees);
+router.get("/:id", EmployeeController.getEmployee);
+router.put("/:id", EmployeeController.updateEmployee);
+router.delete("/:id", EmployeeController.deleteEmployee);
 
 export default router;
