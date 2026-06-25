@@ -4,7 +4,7 @@ FROM minio/minio:latest
 
 # Defaults; overridden by docker-compose environment.
 ENV MINIO_ROOT_USER=gralex \
-    MINIO_ROOT_PASSWORD=gralex
+    MINIO_ROOT_PASSWORD=gralex1234
 
 EXPOSE 9000 9001
 
