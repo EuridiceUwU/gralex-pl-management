@@ -10,8 +10,12 @@ const options = {
     },
     servers: [
       {
+        url: "/api",
+        description: "Via nginx (docker compose)",
+      },
+      {
         url: "http://localhost:3000",
-        description: "Development server",
+        description: "Backend directo (sin nginx)",
       },
     ],
     components: {
