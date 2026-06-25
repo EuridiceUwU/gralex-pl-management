@@ -11,3 +11,8 @@ scrape_configs:
     metrics_path: /metrics
     static_configs:
       - targets: ["backend:3000"]
+
+  - job_name: minio
+    metrics_path: /minio/v2/metrics/cluster
+    static_configs:
+      - targets: ["minio:9000"]

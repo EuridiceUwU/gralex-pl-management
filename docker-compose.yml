@@ -3,8 +3,8 @@ name: gralex-pl-management
 services:
   database:
     build:
-      context: ./Database
-    image: gralex-pl-database:local
+      context: ./database
+    image: gralex-pl/database:local
     container_name: gralex-pl-database
     restart: unless-stopped
     environment:
@@ -16,31 +16,53 @@ services:
     networks:
       - gralex-network
     ports:
-      - "5433:5432"
+      - "${DB_PORT:-5433}:5432"
+
+  ocr:
+    build:
+      context: ./ocr
+    image: gralex-pl/ocr:local
+    container_name: gralex-pl-ocr
+    restart: unless-stopped
+    networks:
+      - gralex-network
 
   backend:
     build:
-      context: ./Backend
+      context: ./backend
     image: gralex-pl/backend:local
     container_name: gralex-pl-backend
     restart: unless-stopped
     environment:
       NODE_ENV: production
+      PORT: 3000
       DB_HOST: database
       DB_PORT: 5432
       DB_USER: ${POSTGRES_USER:-gralex}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-gralex}
       DB_NAME: ${POSTGRES_DB:-gralex_db}
+      JWT_SECRET: ${JWT_SECRET:-super-secret-change-me}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_USE_SSL: "false"
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-gralex}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-gralex}
+      MINIO_BUCKET: ${MINIO_BUCKET:-gralex-documents}
+      OCR_SERVICE_URL: http://ocr:8000
     depends_on:
-      - database
+      database:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      ocr:
+        condition: service_started
     networks:
       - gralex-network
-    ports:
-      - "3000:3000"
 
   frontend:
     build:
-      context: ./Frontend
+      context: ./frontend/gralex-pl
     image: gralex-pl/frontend:local
     container_name: gralex-pl-frontend
     restart: unless-stopped
@@ -48,12 +70,11 @@ services:
       - backend
     networks:
       - gralex-network
-    ports:
-      - "4200:80"
 
   nginx:
     build:
-      context: ./Nginx
+      context: ./nginx
+      dockerfile: config/Dockerfile
     image: gralex-pl/nginx:local
     container_name: gralex-pl-nginx
     restart: unless-stopped
@@ -62,29 +83,34 @@ services:
       - backend
     networks:
       - gralex-network
+    # Single public entry point. Change GRALEX_PORT in .env to expose the whole
+    # app (frontend + /api + /ocr) on a different host port.
     ports:
-      - "80:80"
+      - "${GRALEX_PORT:-8080}:80"
 
   minio:
     build:
-      context: ./Minio
+      context: ./minio
     image: gralex-pl/minio:local
     container_name: gralex-pl-minio
     restart: unless-stopped
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-gralex}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-gralex}
+      # Allow Prometheus to scrape metrics without a bearer token.
+      MINIO_PROMETHEUS_AUTH_TYPE: public
     volumes:
       - minio_data:/data
     networks:
       - gralex-network
     ports:
-      - "9000:9000"
-      - "9101:9001"
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9101}:9001"
 
   prometheus:
     build:
-      context: ./Prometheus
+      context: ./prometheus
+      dockerfile: config/Dockerfile
     image: gralex-pl/prometheus:local
     container_name: gralex-pl-prometheus
     restart: unless-stopped
@@ -93,17 +119,17 @@ services:
     networks:
       - gralex-network
     ports:
-      - "9090:9090"
+      - "${PROMETHEUS_PORT:-9090}:9090"
 
   grafana:
     build:
-      context: ./Grafana
+      context: ./grafana
     image: gralex-pl/grafana:local
     container_name: gralex-pl-grafana
     restart: unless-stopped
     environment:
-      GF_SECURITY_ADMIN_USER: ${GF_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GF_ADMIN_PASSWORD:-admin}
+      GF_SECURITY_ADMIN_USER: ${GF_ADMIN_USER:-gralex}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_ADMIN_PASSWORD:-gralex}
     depends_on:
       - prometheus
     volumes:
@@ -111,7 +137,7 @@ services:
     networks:
       - gralex-network
     ports:
-      - "3001:3000"
+      - "${GRAFANA_PORT:-3001}:3000"
 
 networks:
   gralex-network:

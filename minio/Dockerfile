@@ -2,7 +2,8 @@
 
 FROM minio/minio:latest
 
-ENV MINIO_ROOT_USER=gralex
+# Defaults; overridden by docker-compose environment.
+ENV MINIO_ROOT_USER=gralex \
     MINIO_ROOT_PASSWORD=gralex
 
 EXPOSE 9000 9001
