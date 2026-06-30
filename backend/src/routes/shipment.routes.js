@@ -87,5 +87,6 @@ router.post("/", ShipmentController.create);
  */
 router.get("/:id", ShipmentController.get);
 router.patch("/:id/status", ShipmentController.updateStatus);
+router.patch("/:id/remove-supplier", ShipmentController.removeSupplier);
 
 export default router;

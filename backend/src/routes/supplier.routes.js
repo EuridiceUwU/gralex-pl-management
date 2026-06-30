@@ -54,5 +54,6 @@ router.post("/", SupplierController.create);
 router.get("/:id", SupplierController.get);
 router.put("/:id", SupplierController.update);
 router.delete("/:id", SupplierController.remove);
+router.get("/:id/shipments", SupplierController.listShipments);
 
 export default router;

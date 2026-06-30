@@ -38,10 +38,10 @@ export const create = async (req, res) => {
     price,
   } = req.body;
 
-  if (!ssId || !supplierId || !customerId || !trackingNum) {
+  if (!ssId || !trackingNum) {
     return res.status(400).json({
       ok: false,
-      message: "ssId, supplierId, customerId y trackingNum son obligatorios",
+      message: "ssId y trackingNum son obligatorios",
     });
   }
 
@@ -64,6 +64,19 @@ export const create = async (req, res) => {
   });
 
   return res.status(201).json({ ok: true, message: "Guía registrada", shipment });
+};
+
+export const removeSupplier = async (req, res) => {
+  const shipment = await ShipmentModel.removeSupplier(
+    Number(req.params.id),
+    req.user?.sub ?? null,
+  );
+
+  if (!shipment) {
+    return res.status(404).json({ ok: false, message: "Guía no encontrada" });
+  }
+
+  return res.json({ ok: true, message: "Proveedor removido de la guía", shipment });
 };
 
 export const updateStatus = async (req, res) => {

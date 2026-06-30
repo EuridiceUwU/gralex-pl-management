@@ -1,13 +1,21 @@
 import { pool } from "../config/db.js";
 
 export const listSuppliers = async () => {
-  const { rows } = await pool.query('SELECT * FROM "Suppliers" ORDER BY "supplier_id"');
+  const { rows } = await pool.query('SELECT * FROM "vw_suppliers_with_balance" ORDER BY "supplier_id"');
   return rows;
 };
 
 export const getSupplier = async (id) => {
-  const { rows } = await pool.query('SELECT * FROM "Suppliers" WHERE "supplier_id" = $1', [id]);
+  const { rows } = await pool.query('SELECT * FROM "vw_suppliers_with_balance" WHERE "supplier_id" = $1', [id]);
   return rows[0] ?? null;
+};
+
+export const listShipmentsBySupplier = async (supplierId) => {
+  const { rows } = await pool.query(
+    'SELECT * FROM "vw_shipments_detail" WHERE "supplier_id" = $1 ORDER BY "shipment_id" DESC',
+    [supplierId],
+  );
+  return rows;
 };
 
 // sp_supplier_create returns only the new row's id; the row itself is

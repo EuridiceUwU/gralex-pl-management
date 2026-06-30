@@ -59,3 +59,8 @@ export const remove = async (req, res) => {
 
   return res.json({ ok: true, message: "Proveedor dado de baja", supplier });
 };
+
+export const listShipments = async (req, res) => {
+  const shipments = await SupplierModel.listShipmentsBySupplier(Number(req.params.id));
+  return res.json({ ok: true, shipments });
+};

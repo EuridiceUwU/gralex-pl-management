@@ -49,3 +49,9 @@ export const updateStatus = async (id, ssId, userId) => {
   await pool.query("CALL sp_shipment_update_status($1, $2, $3)", [id, ssId, userId]);
   return getShipment(id);
 };
+
+// sp_shipment_remove_supplier is a void procedure.
+export const removeSupplier = async (id, userId) => {
+  await pool.query("CALL sp_shipment_remove_supplier($1, $2)", [id, userId]);
+  return getShipment(id);
+};

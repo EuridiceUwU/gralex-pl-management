@@ -97,8 +97,8 @@ CREATE TABLE "Shipments" (
     "shipment_id" serial PRIMARY KEY,
     "ss_id" int NOT NULL,
     "created_by" int NOT NULL,
-    "supplier_id" int NOT NULL,
-    "customer_id" int NOT NULL,
+    "supplier_id" int,
+    "customer_id" int,
     "minio_id" int,
     "tracking_num" varchar(40) NOT NULL,
     "sender_name" varchar(30),
@@ -234,8 +234,8 @@ SELECT s."shipment_id",
        s."minio_id",
        m."minio_key"
 FROM "Shipments" s
-JOIN "Customers" c        ON c."customer_id" = s."customer_id"
-JOIN "Suppliers" sup      ON sup."supplier_id" = s."supplier_id"
+LEFT JOIN "Customers" c        ON c."customer_id" = s."customer_id"
+LEFT JOIN "Suppliers" sup      ON sup."supplier_id" = s."supplier_id"
 JOIN "Shipments_status" st ON st."ss_id" = s."ss_id"
 LEFT JOIN "Minio_documents" m ON m."minio_id" = s."minio_id";
 
@@ -248,6 +248,26 @@ SELECT
     (SELECT COUNT(*) FROM "Customers" WHERE "status")              AS "total_customers",
     (SELECT COUNT(*) FROM "Suppliers" WHERE "status")              AS "total_suppliers",
     (SELECT COUNT(*) FROM "Employees" WHERE "status")              AS "total_employees";
+
+CREATE OR REPLACE VIEW "vw_suppliers_with_balance" AS
+SELECT s."supplier_id",
+       s."created_by",
+       s."name",
+       s."credit_amount",
+       s."rfc",
+       s."phone",
+       s."email",
+       s."status",
+       s."created_at",
+       COALESCE(SUM(sh."cost") FILTER (WHERE st."ss_name" IS DISTINCT FROM 'Cancelado'), 0) AS "total_consumed",
+       CASE
+         WHEN s."credit_amount" IS NULL THEN NULL
+         ELSE (s."credit_amount" - COALESCE(SUM(sh."cost") FILTER (WHERE st."ss_name" IS DISTINCT FROM 'Cancelado'), 0))
+       END AS "available_balance"
+FROM "Suppliers" s
+LEFT JOIN "Shipments" sh ON sh."supplier_id" = s."supplier_id"
+LEFT JOIN "Shipments_status" st ON st."ss_id" = sh."ss_id"
+GROUP BY s."supplier_id";
 
 CREATE OR REPLACE VIEW "vw_shipments_by_supplier" AS
 SELECT sup."supplier_id",
@@ -633,6 +653,15 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE PROCEDURE sp_shipment_remove_supplier(p_id int, p_user_id int)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    PERFORM set_config('app.current_user_id', p_user_id::text, true);
+    UPDATE "Shipments" SET "supplier_id" = NULL WHERE "shipment_id" = p_id;
+END;
+$$;
+
 -- ---- Documents (MinIO references) -----------------------------------------
 CREATE OR REPLACE PROCEDURE sp_document_create(
     p_document_type document_type,
@@ -658,8 +687,11 @@ $$;
 -- Shipment statuses
 INSERT INTO "Shipments_status" ("ss_name")
 SELECT v
-FROM (VALUES ('Pendiente'), ('En tránsito'), ('Entregado'), ('Cancelado')) AS t(v)
+FROM (VALUES ('Etiqueta creada'), ('En tránsito'), ('Entregado'), ('Cancelado')) AS t(v)
 WHERE NOT EXISTS (SELECT 1 FROM "Shipments_status" s WHERE s."ss_name" = t.v);
+
+-- Rename legacy "Pendiente" status for existing databases
+UPDATE "Shipments_status" SET "ss_name" = 'Etiqueta creada' WHERE "ss_name" = 'Pendiente';
 
 -- Bootstrap administrator: Role -> Employee -> User.
 -- The login user is admin@gralex.com / admin123 (bcrypt hash via pgcrypto).
@@ -667,6 +699,7 @@ DO $$
 DECLARE
     v_role_id int;
     v_employee_id int;
+    v_admin_id int;
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM "Users" WHERE "email" = 'admin@gralex.com') THEN
         INSERT INTO "Roles" ("role_name", "salary", "description")
@@ -678,6 +711,15 @@ BEGIN
         RETURNING "employee_id" INTO v_employee_id;
 
         INSERT INTO "Users" ("employee_id", "email", "password")
-        VALUES (v_employee_id, 'admin@gralex.com', crypt('admin123', gen_salt('bf', 10)));
+        VALUES (v_employee_id, 'admin@gralex.com', crypt('admin123', gen_salt('bf', 10)))
+        RETURNING "user_id" INTO v_admin_id;
+
+        -- Seed test supplier
+        INSERT INTO "Suppliers" ("created_by", "name", "credit_amount", "rfc", "phone", "email")
+        VALUES (v_admin_id, 'DHL Express', 50000.00, 'DHL010101AAA', '5512345678', 'contacto@dhl.com');
+
+        -- Seed test customer
+        INSERT INTO "Customers" ("created_by", "name", "company_name", "cp", "rfc", "phone", "email", "cfdi")
+        VALUES (v_admin_id, 'Juan Pérez', 'Empresa Ejemplo S.A. de C.V.', '94500', 'PEPJ010101HDF', '2711234567', 'juan@ejemplo.com', 'G01');
     END IF;
 END $$;
