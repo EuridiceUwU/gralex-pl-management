@@ -11,7 +11,7 @@ export const minioClient = new Client({
   port,
   useSSL,
   accessKey: process.env.MINIO_ACCESS_KEY ?? process.env.MINIO_ROOT_USER ?? "gralex",
-  secretKey: process.env.MINIO_SECRET_KEY ?? process.env.MINIO_ROOT_PASSWORD ?? "gralex",
+  secretKey: process.env.MINIO_SECRET_KEY ?? process.env.MINIO_ROOT_PASSWORD ?? "gralex123",
 });
 
 /**
