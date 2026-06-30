@@ -75,6 +75,11 @@ export interface Supplier {
   status: boolean;
 }
 
+export interface SupplierWithBalance extends Supplier {
+  total_consumed: string;
+  available_balance: string | null;
+}
+
 export interface Employee {
   employee_id: number;
   name: string;

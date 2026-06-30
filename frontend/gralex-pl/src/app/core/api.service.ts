@@ -10,6 +10,7 @@ import {
   OcrResult,
   Shipment,
   Supplier,
+  SupplierWithBalance,
 } from './models';
 
 /**
@@ -49,12 +50,36 @@ export class ApiService {
   }
 
   // Suppliers
-  suppliers(): Observable<{ suppliers: Supplier[] }> {
-    return this.http.get<{ suppliers: Supplier[] }>(`${API_BASE}/suppliers`);
+  suppliers(): Observable<{ suppliers: SupplierWithBalance[] }> {
+    return this.http.get<{ suppliers: SupplierWithBalance[] }>(`${API_BASE}/suppliers`);
+  }
+
+  getSupplier(id: number): Observable<{ supplier: SupplierWithBalance }> {
+    return this.http.get<{ supplier: SupplierWithBalance }>(`${API_BASE}/suppliers/${id}`);
   }
 
   createSupplier(payload: unknown): Observable<unknown> {
     return this.http.post(`${API_BASE}/suppliers`, payload);
+  }
+
+  updateSupplier(id: number, payload: unknown): Observable<unknown> {
+    return this.http.put(`${API_BASE}/suppliers/${id}`, payload);
+  }
+
+  deleteSupplier(id: number): Observable<unknown> {
+    return this.http.delete(`${API_BASE}/suppliers/${id}`);
+  }
+
+  supplierShipments(id: number): Observable<{ shipments: Shipment[] }> {
+    return this.http.get<{ shipments: Shipment[] }>(`${API_BASE}/suppliers/${id}/shipments`);
+  }
+
+  updateShipmentStatus(id: number, ssId: number): Observable<unknown> {
+    return this.http.patch(`${API_BASE}/shipments/${id}/status`, { ssId });
+  }
+
+  removeShipmentSupplier(id: number): Observable<unknown> {
+    return this.http.patch(`${API_BASE}/shipments/${id}/remove-supplier`, {});
   }
 
   // Employees

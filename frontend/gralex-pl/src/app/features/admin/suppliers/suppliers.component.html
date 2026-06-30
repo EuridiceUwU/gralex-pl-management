@@ -3,7 +3,7 @@
     <h2 class="text-2xl font-bold">Proveedores</h2>
     <p class="text-sm text-slate-500">Paqueterías y proveedores de servicio.</p>
   </div>
-  <button (click)="showForm.set(!showForm())" class="rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-600">
+  <button (click)="showForm() ? cancelForm() : showForm.set(true)" class="rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-600">
     {{ showForm() ? 'Cerrar' : '+ Nuevo proveedor' }}
   </button>
 </div>
@@ -22,37 +22,116 @@
     <label class="text-sm"><span class="font-medium text-slate-700">RFC</span>
       <input name="rfc" #rfcRef="ngModel" [(ngModel)]="form.rfc" minlength="12" maxlength="13" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
       <app-field-error [field]="rfcRef" /></label>
-    <label class="text-sm"><span class="font-medium text-slate-700">Crédito</span>
+    <label class="text-sm"><span class="font-medium text-slate-700">Saldo</span>
       <input name="creditAmount" type="number" #creditRef="ngModel" [(ngModel)]="form.creditAmount" min="0" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
       <app-field-error [field]="creditRef" /></label>
-    <div class="md:col-span-3">
+    <div class="md:col-span-3 flex gap-3">
       <button type="submit" [disabled]="saving() || f.invalid" class="rounded-xl bg-brand-500 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:opacity-60">
-        {{ saving() ? 'Guardando…' : 'Guardar' }}
+        {{ saving() ? 'Guardando…' : (editingId() ? 'Actualizar' : 'Guardar') }}
+      </button>
+      <button type="button" (click)="cancelForm()" class="rounded-xl border border-slate-200 px-6 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
+        Cancelar
       </button>
     </div>
   </form>
 }
 
-<div class="mt-6 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
+<div class="mt-4 flex items-center gap-3">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5 text-slate-400">
+    <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+  </svg>
+  <input
+    type="text"
+    placeholder="Buscar por nombre, email, teléfono o RFC…"
+    [ngModel]="search()"
+    (ngModelChange)="search.set($event)"
+    class="w-full max-w-md rounded-lg border border-slate-200 px-3 py-2 text-sm placeholder-slate-400 focus:border-brand-400 focus:outline-none"
+  />
+</div>
+
+<div class="mt-4 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
   @if (loading()) {
     <p class="p-6 text-slate-500">Cargando…</p>
   } @else {
     <table class="w-full text-left text-sm">
       <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-        <tr><th class="px-4 py-3">Nombre</th><th class="px-4 py-3">Email</th><th class="px-4 py-3">Teléfono</th><th class="px-4 py-3">RFC</th></tr>
+        <tr>
+          <th class="px-4 py-3">Nombre</th>
+          <th class="px-4 py-3">Email</th>
+          <th class="px-4 py-3">Teléfono</th>
+          <th class="px-4 py-3">RFC</th>
+          <th class="px-4 py-3 text-right">Saldo disponible</th>
+          <th class="px-4 py-3">Estado</th>
+          <th class="px-4 py-3"></th>
+        </tr>
       </thead>
       <tbody class="divide-y divide-slate-100">
-        @for (s of items(); track s.supplier_id) {
+        @for (s of filtered(); track s.supplier_id) {
           <tr class="transition hover:bg-slate-50">
-            <td class="px-4 py-3 font-medium text-slate-800">{{ s.name }}</td>
+            <td class="px-4 py-3">
+              <button (click)="viewDetail(s.supplier_id)" class="font-medium text-brand-600 hover:text-brand-700 hover:underline">
+                {{ s.name }}
+              </button>
+            </td>
             <td class="px-4 py-3">{{ s.email || '—' }}</td>
             <td class="px-4 py-3">{{ s.phone || '—' }}</td>
             <td class="px-4 py-3">{{ s.rfc || '—' }}</td>
+            <td class="px-4 py-3 text-right">
+              @if (s.available_balance != null) {
+                <span [class.text-emerald-600]="asNumber(s.available_balance) > 0" [class.text-red-600]="asNumber(s.available_balance) <= 0" class="font-semibold">
+                  ${{ s.available_balance | number: '1.2-2' }}
+                </span>
+              } @else {
+                <span class="text-slate-400">—</span>
+              }
+            </td>
+            <td class="px-4 py-3">
+              @if (s.status) {
+                <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">Activo</span>
+              } @else {
+                <span class="rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700">Inactivo</span>
+              }
+            </td>
+            <td class="px-4 py-3 text-right">
+              <div class="flex gap-2 justify-end">
+                <button (click)="startEdit(s)" class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50">
+                  Editar
+                </button>
+                @if (s.status) {
+                  <button (click)="confirmDeactivate(s)" class="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50">
+                    Desactivar
+                  </button>
+                } @else {
+                  <button (click)="activate(s)" class="rounded-lg border border-emerald-200 px-3 py-1.5 text-xs font-medium text-emerald-600 transition hover:bg-emerald-50">
+                    Activar
+                  </button>
+                }
+              </div>
+            </td>
           </tr>
         } @empty {
-          <tr><td colspan="4" class="px-4 py-8 text-center text-slate-400">Sin proveedores.</td></tr>
+          <tr><td colspan="7" class="px-4 py-8 text-center text-slate-400">Sin proveedores.</td></tr>
         }
       </tbody>
     </table>
   }
 </div>
+
+@if (confirmTarget(); as s) {
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+    <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+      <h3 class="text-lg font-bold text-slate-800">Desactivar proveedor</h3>
+      <p class="mt-2 text-sm text-slate-600">
+        ¿Estás seguro de desactivar a <strong>{{ s.name }}</strong>?
+      </p>
+      <div class="mt-6 flex justify-end gap-3">
+        <button (click)="cancelConfirm()" class="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
+          Cancelar
+        </button>
+        <button (click)="deactivate()" class="rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700">
+          Desactivar
+        </button>
+      </div>
+    </div>
+  </div>
+}
