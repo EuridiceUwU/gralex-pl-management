@@ -1,0 +1,133 @@
+<div class="flex items-center gap-4">
+  <button (click)="goBack()" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50">
+    ← Volver
+  </button>
+  <div>
+    <h2 class="text-2xl font-bold">{{ supplier()?.name || 'Proveedor' }}</h2>
+  </div>
+</div>
+
+@if (supplier(); as s) {
+  <div class="mt-4 grid grid-cols-2 gap-4">
+    <div class="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+      <p class="text-xs uppercase tracking-wide text-slate-400">Consumido</p>
+      <p class="mt-1 text-lg font-bold text-slate-800">${{ s.total_consumed | number: '1.2-2' }}</p>
+    </div>
+    <div class="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+      <p class="text-xs uppercase tracking-wide text-slate-400">Saldo disponible</p>
+      @if (s.available_balance != null) {
+        <p class="mt-1 text-lg font-bold" [class.text-emerald-600]="asNumber(s.available_balance) > 0" [class.text-red-600]="asNumber(s.available_balance) <= 0">
+          ${{ s.available_balance | number: '1.2-2' }}
+        </p>
+      } @else {
+        <p class="mt-1 text-lg font-bold text-slate-400">—</p>
+      }
+    </div>
+  </div>
+}
+
+<div class="mt-4 flex items-center gap-3">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5 text-slate-400">
+    <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+  </svg>
+  <input
+    type="text"
+    placeholder="Buscar por guía, cliente o estado…"
+    [ngModel]="search()"
+    (ngModelChange)="search.set($event)"
+    class="w-full max-w-md rounded-lg border border-slate-200 px-3 py-2 text-sm placeholder-slate-400 focus:border-brand-400 focus:outline-none"
+  />
+</div>
+
+<div class="mt-4 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
+  <div class="px-4 py-3 border-b border-slate-100">
+    <h3 class="text-lg font-bold">Guías de este proveedor</h3>
+  </div>
+  @if (loading()) {
+    <p class="p-6 text-slate-500">Cargando…</p>
+  } @else {
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+        <tr>
+          <th class="px-4 py-3">Guía</th>
+          <th class="px-4 py-3">Cliente</th>
+          <th class="px-4 py-3">Estado</th>
+          <th class="px-4 py-3">Peso</th>
+          <th class="px-4 py-3 text-right">Costo</th>
+          <th class="px-4 py-3 text-right">Precio</th>
+          <th class="px-4 py-3"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        @for (sh of filteredShipments(); track sh.shipment_id) {
+          <tr class="transition hover:bg-slate-50">
+            <td class="px-4 py-3 font-medium text-slate-800">{{ sh.tracking_num }}</td>
+            <td class="px-4 py-3">{{ sh.customer_name || '—' }}</td>
+            <td class="px-4 py-3">
+              @if (sh.status_name === 'Cancelado') {
+                <span class="rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700">{{ sh.status_name }}</span>
+              } @else {
+                <span class="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700">{{ sh.status_name }}</span>
+              }
+            </td>
+            <td class="px-4 py-3">{{ sh.weight || '—' }}</td>
+            <td class="px-4 py-3 text-right">{{ sh.cost ? ('$' + (sh.cost | number: '1.2-2')) : '—' }}</td>
+            <td class="px-4 py-3 text-right font-semibold">{{ sh.price ? ('$' + (sh.price | number: '1.2-2')) : '—' }}</td>
+            <td class="px-4 py-3 text-right">
+              <div class="flex gap-2 justify-end">
+                @if (sh.status_name !== 'Cancelado') {
+                  <button (click)="confirmCancel(sh)" class="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50">
+                    Cancelar
+                  </button>
+                }
+                <button (click)="confirmRemove(sh)" class="rounded-lg border border-orange-200 px-3 py-1.5 text-xs font-medium text-orange-600 transition hover:bg-orange-50">
+                  Quitar
+                </button>
+              </div>
+            </td>
+          </tr>
+        } @empty {
+          <tr><td colspan="7" class="px-4 py-8 text-center text-slate-400">Sin guías para este proveedor.</td></tr>
+        }
+      </tbody>
+    </table>
+  }
+</div>
+
+@if (cancelTarget(); as sh) {
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+    <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+      <h3 class="text-lg font-bold text-slate-800">Cancelar guía</h3>
+      <p class="mt-2 text-sm text-slate-600">
+        ¿Estás seguro de cancelar la guía <strong>{{ sh.tracking_num }}</strong>?
+      </p>
+      <div class="mt-6 flex justify-end gap-3">
+        <button (click)="dismissModals()" class="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
+          No
+        </button>
+        <button (click)="executeCancel()" class="rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700">
+          Sí, cancelar
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (removeTarget(); as sh) {
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+    <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+      <h3 class="text-lg font-bold text-slate-800">Quitar proveedor</h3>
+      <p class="mt-2 text-sm text-slate-600">
+        ¿Quitar el proveedor de la guía <strong>{{ sh.tracking_num }}</strong>? La guía quedará sin proveedor asignado.
+      </p>
+      <div class="mt-6 flex justify-end gap-3">
+        <button (click)="dismissModals()" class="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
+          No
+        </button>
+        <button (click)="executeRemove()" class="rounded-xl bg-orange-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-700">
+          Sí, quitar
+        </button>
+      </div>
+    </div>
+  </div>
+}

@@ -6,8 +6,10 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+RUN corepack enable
+
+COPY package.json pnpm-lock.yaml ./
+RUN corepack install && pnpm install --prod --frozen-lockfile --ignore-scripts && pnpm store prune
 
 ############################
 # Stage 2: runtime
