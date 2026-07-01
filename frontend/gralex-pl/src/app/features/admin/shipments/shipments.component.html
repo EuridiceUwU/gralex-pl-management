@@ -53,7 +53,7 @@
     </label>
     <label class="text-sm">
       <span class="font-medium text-slate-700">Remitente</span>
-      <input name="senderName" #senderRef="ngModel" [(ngModel)]="form.senderName" maxlength="30" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
+      <input name="senderName" #senderRef="ngModel" [(ngModel)]="form.senderName" maxlength="70" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
       <app-field-error [field]="senderRef" />
     </label>
     <label class="text-sm">
@@ -63,7 +63,7 @@
     </label>
     <label class="text-sm">
       <span class="font-medium text-slate-700">Destinatario</span>
-      <input name="receiverName" #receiverRef="ngModel" [(ngModel)]="form.receiverName" maxlength="30" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
+      <input name="receiverName" #receiverRef="ngModel" [(ngModel)]="form.receiverName" maxlength="70" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
       <app-field-error [field]="receiverRef" />
     </label>
     <label class="text-sm">

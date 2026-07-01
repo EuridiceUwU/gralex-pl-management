@@ -1,11 +1,13 @@
 <h2 class="text-2xl font-bold">Subir guía</h2>
-<p class="text-sm text-slate-500">Carga un PDF de la guía; el OCR autollenará los datos para que los confirmes.</p>
+<p class="text-sm text-slate-500">
+  Carga uno o varios PDFs (máx. {{ maxBatch }}); el OCR autollenará los datos para que los confirmes.
+</p>
 
 @if (message()) {
-  <div class="mt-4 rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-700">{{ message() }}</div>
+  <div class="mt-4 rounded-lg bg-amber-50 px-4 py-2.5 text-sm text-amber-800">{{ message() }}</div>
 }
 
-<!-- Step 1: select file -->
+<!-- Step 1: select files -->
 @if (step() === 'select') {
   <div class="mt-6 max-w-2xl rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
     <label
@@ -31,158 +33,287 @@
         <path d="M17 8l-5-5-5 5" />
         <path d="M12 3v12" />
       </svg>
-      <span class="mt-3 font-medium text-slate-700">
-        {{ file() ? file()!.name : 'Haz clic o arrastra un archivo aquí' }}
-      </span>
-      <span class="mt-1 text-xs text-slate-400">PDF, PNG o JPG (máx. 15 MB)</span>
-      <input type="file" accept="application/pdf,image/*" (change)="onFile($event)" class="hidden" />
+      <span class="mt-3 font-medium text-slate-700">Haz clic o arrastra uno o varios archivos aquí</span>
+      <span class="mt-1 text-xs text-slate-400">PDF, PNG o JPG (máx. 15 MB c/u, hasta {{ maxBatch }})</span>
+      <input type="file" accept="application/pdf,image/*" multiple (change)="onFile($event)" class="hidden" />
     </label>
+
+    @if (files().length) {
+      <ul class="mt-4 space-y-2">
+        @for (f of files(); track $index) {
+          <li class="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm">
+            <span class="truncate text-slate-700">{{ f.name }}</span>
+            <button
+              type="button"
+              (click)="removeSelected($index)"
+              class="ml-3 shrink-0 text-slate-400 transition hover:text-red-500"
+              aria-label="Quitar archivo"
+            >
+              ✕
+            </button>
+          </li>
+        }
+      </ul>
+    }
 
     <div class="mt-6">
       <button
         (click)="extract()"
-        [disabled]="!file() || ocrLoading()"
+        [disabled]="!files().length || ocrLoading()"
         class="rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:opacity-50"
       >
-        {{ ocrLoading() ? 'Leyendo…' : 'Leer y continuar' }}
+        @if (ocrLoading()) {
+          Leyendo… ({{ ocrProgress().done }}/{{ ocrProgress().total }})
+        } @else {
+          Leer y continuar
+        }
       </button>
     </div>
   </div>
 }
 
-<!-- Step 2: review + edit -->
-@if (step() === 'review') {
-  <form #f="ngForm" (ngSubmit)="confirm()" class="mt-6 grid gap-4 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm md:grid-cols-3">
-    <div class="md:col-span-3 rounded-lg bg-brand-50 px-4 py-2.5 text-sm text-brand-700">
-      Revisa y edita los datos extraídos del archivo <strong>{{ file()?.name }}</strong> antes de guardar.
+<!-- Step 2: review modal -->
+@if (step() === 'review' && current(); as g) {
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div class="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
+      <!-- header -->
+      <div class="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+        <div>
+          <h3 class="text-lg font-bold">Revisar guías del lote</h3>
+          <p class="text-sm text-slate-500">
+            Guía {{ currentIndex() + 1 }} de {{ guides().length }} — {{ g.file.name }}
+          </p>
+        </div>
+        <button
+          type="button"
+          (click)="cancelReview()"
+          class="rounded-lg px-2 py-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+          aria-label="Cerrar"
+        >
+          ✕
+        </button>
+      </div>
+
+      <!-- body -->
+      <div class="grid flex-1 gap-6 overflow-y-auto px-6 py-5 md:grid-cols-2">
+        <!-- left: preview + magnifier -->
+        <div>
+          <div class="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+            @if (g.previewUrl) {
+              <img
+                #preview
+                [src]="g.previewUrl"
+                alt="Previsualización de la guía"
+                class="block w-full cursor-crosshair select-none"
+                (mousemove)="onPreviewMove($event, preview)"
+                (mouseleave)="hideLens()"
+              />
+              @if (lens().visible) {
+                <div
+                  class="pointer-events-none absolute rounded-full border-2 border-brand-400 shadow-lg"
+                  [style.width.px]="lensSize"
+                  [style.height.px]="lensSize"
+                  [style.left.px]="lens().x"
+                  [style.top.px]="lens().y"
+                  [style.background-image]="'url(' + g.previewUrl + ')'"
+                  [style.background-repeat]="'no-repeat'"
+                  [style.background-size.px]="lens().bgW"
+                  [style.background-position]="lens().bgX + 'px ' + lens().bgY + 'px'"
+                ></div>
+              }
+            } @else {
+              <div class="flex h-64 items-center justify-center text-sm text-slate-400">
+                Sin previsualización disponible
+              </div>
+            }
+          </div>
+          <p class="mt-2 text-center text-xs text-slate-400">Pasa el cursor por encima para ampliar con la lupa.</p>
+        </div>
+
+        <!-- right: confirmation form -->
+        <form #f="ngForm" class="grid gap-4 md:grid-cols-2">
+          <label class="text-sm">
+            <span class="font-medium text-slate-700">Paquetería</span>
+            <select name="carrier" [(ngModel)]="g.form.carrier" (ngModelChange)="onCarrierChange()" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
+              <option [ngValue]="null">Sin especificar</option>
+              @for (c of carrierOptions; track c) {
+                <option [ngValue]="c">{{ c }}</option>
+              }
+            </select>
+          </label>
+          @if (g.form.carrier === 'Otro') {
+            <label class="text-sm">
+              <span class="font-medium text-slate-700">¿Cuál paquetería?</span>
+              <input name="carrierOther" [(ngModel)]="g.form.carrierOther" maxlength="30" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
+            </label>
+          }
+          <label class="text-sm">
+            <span class="font-medium text-slate-700">Servicio</span>
+            <select name="service" [(ngModel)]="g.form.service" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
+              <option [ngValue]="null">Sin especificar</option>
+              @for (sv of serviceOptions; track sv) {
+                <option [ngValue]="sv">{{ sv }}</option>
+              }
+            </select>
+          </label>
+          <label class="text-sm">
+            <span class="font-medium text-slate-700">Estado</span>
+            <select name="ssId" [(ngModel)]="g.form.ssId" required class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
+              <option [ngValue]="null" disabled>Selecciona…</option>
+              @for (st of statuses(); track st.ss_id) {
+                <option [ngValue]="st.ss_id">{{ st.ss_name }}</option>
+              }
+            </select>
+          </label>
+
+          <label class="text-sm">
+            <span class="font-medium text-slate-700">No. de guía</span>
+            <input name="trackingNum" #trackingRef="ngModel" [(ngModel)]="g.form.trackingNum" required minlength="4" maxlength="40" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
+            <app-field-error [field]="trackingRef" />
+          </label>
+          <label class="text-sm">
+            <span class="font-medium text-slate-700">Fecha de creación</span>
+            <input type="date" name="creationDate" [(ngModel)]="g.form.creationDate" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
+          </label>
+          <label class="text-sm">
+            <span class="font-medium text-slate-700">Remitente</span>
+            <input name="senderName" [(ngModel)]="g.form.senderName" maxlength="70" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
+          </label>
+          <label class="text-sm">
+            <span class="font-medium text-slate-700">CP origen</span>
+            <input name="senderCp" #senderCpRef="ngModel" [(ngModel)]="g.form.senderCp" pattern="\d{5}" maxlength="5" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
+            <app-field-error [field]="senderCpRef" patternMessage="Deben ser 5 dígitos." />
+          </label>
+          <label class="text-sm">
+            <span class="font-medium text-slate-700">Destinatario</span>
+            <input name="receiverName" [(ngModel)]="g.form.receiverName" maxlength="70" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
+          </label>
+          <label class="text-sm">
+            <span class="font-medium text-slate-700">CP destino</span>
+            <input name="receiverCp" #cpRef="ngModel" [(ngModel)]="g.form.receiverCp" pattern="\d{5}" maxlength="5" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
+            <app-field-error [field]="cpRef" patternMessage="Deben ser 5 dígitos." />
+          </label>
+          <label class="text-sm">
+            <span class="font-medium text-slate-700">Peso (kg)</span>
+            <input name="weight" [(ngModel)]="g.form.weight" maxlength="7" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
+          </label>
+
+          <label class="text-sm">
+            <span class="font-medium text-slate-700">Cliente <span class="text-slate-400">(opcional)</span></span>
+            <select name="customerId" [(ngModel)]="g.form.customerId" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
+              <option [ngValue]="null">Sin cliente</option>
+              @for (c of customers(); track c.customer_id) {
+                <option [ngValue]="c.customer_id">{{ c.name }}</option>
+              }
+            </select>
+          </label>
+          <label class="text-sm">
+            <span class="font-medium text-slate-700">Proveedor <span class="text-slate-400">(opcional)</span></span>
+            <select name="supplierId" [(ngModel)]="g.form.supplierId" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
+              <option [ngValue]="null">Sin proveedor</option>
+              @for (s of suppliers(); track s.supplier_id) {
+                <option [ngValue]="s.supplier_id">{{ s.name }}</option>
+              }
+            </select>
+          </label>
+          <label class="text-sm">
+            <span class="font-medium text-slate-700">Costo <span class="text-slate-400">(opcional)</span></span>
+            <input name="cost" type="number" [(ngModel)]="g.form.cost" min="0" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
+          </label>
+          <label class="text-sm">
+            <span class="font-medium text-slate-700">Precio <span class="text-slate-400">(opcional)</span></span>
+            <input name="price" type="number" [(ngModel)]="g.form.price" min="0" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
+          </label>
+
+          @if (g.save === 'error' && g.errorMsg) {
+            <div class="md:col-span-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ g.errorMsg }}</div>
+          }
+        </form>
+      </div>
+
+      <!-- carousel -->
+      <div class="flex items-center gap-2 border-t border-slate-100 px-6 py-3">
+        <button
+          type="button"
+          (click)="prev()"
+          [disabled]="currentIndex() === 0"
+          class="shrink-0 rounded-lg border border-slate-200 px-2 py-1 text-slate-600 transition hover:bg-slate-50 disabled:opacity-40"
+          aria-label="Anterior"
+        >
+          ‹
+        </button>
+        <div class="flex flex-1 gap-2 overflow-x-auto py-1">
+          @for (guide of guides(); track $index) {
+            <button
+              type="button"
+              (click)="go($index)"
+              class="relative shrink-0 overflow-hidden rounded-lg border-2 transition"
+              [class.border-brand-500]="$index === currentIndex()"
+              [class.border-slate-200]="$index !== currentIndex()"
+              [title]="guide.file.name"
+            >
+              @if (guide.previewUrl) {
+                <img [src]="guide.previewUrl" alt="" class="h-20 w-16 object-cover object-top" />
+              } @else {
+                <div class="flex h-20 w-16 items-center justify-center bg-slate-100 text-[10px] text-slate-400">PDF</div>
+              }
+              @if (guide.save === 'saved') {
+                <span class="absolute right-0.5 top-0.5 rounded-full bg-emerald-500 px-1 text-[10px] text-white">✓</span>
+              } @else if (guide.save === 'error') {
+                <span class="absolute right-0.5 top-0.5 rounded-full bg-red-500 px-1 text-[10px] text-white">✕</span>
+              }
+            </button>
+          }
+        </div>
+        <button
+          type="button"
+          (click)="next()"
+          [disabled]="currentIndex() === guides().length - 1"
+          class="shrink-0 rounded-lg border border-slate-200 px-2 py-1 text-slate-600 transition hover:bg-slate-50 disabled:opacity-40"
+          aria-label="Siguiente"
+        >
+          ›
+        </button>
+      </div>
+
+      <!-- footer -->
+      <div class="flex items-center justify-between border-t border-slate-100 px-6 py-4">
+        <button
+          type="button"
+          (click)="cancelReview()"
+          class="rounded-xl border border-slate-200 px-6 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          (click)="send()"
+          [disabled]="sending()"
+          class="rounded-xl bg-brand-500 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:opacity-60"
+        >
+          @if (sending()) {
+            Enviando… ({{ sendProgress().done }}/{{ sendProgress().total }})
+          } @else {
+            Enviar {{ guides().length }} guía(s)
+          }
+        </button>
+      </div>
     </div>
-
-    <label class="text-sm">
-      <span class="font-medium text-slate-700">Paquetería</span>
-      <select name="carrier" #carrierRef="ngModel" [(ngModel)]="form.carrier" (ngModelChange)="onCarrierChange()" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
-        <option [ngValue]="null">Sin especificar</option>
-        @for (c of carrierOptions; track c) {
-          <option [ngValue]="c">{{ c }}</option>
-        }
-      </select>
-      <app-field-error [field]="carrierRef" />
-    </label>
-    @if (form.carrier === 'Otro') {
-      <label class="text-sm">
-        <span class="font-medium text-slate-700">¿Cuál paquetería?</span>
-        <input name="carrierOther" #carrierOtherRef="ngModel" [(ngModel)]="form.carrierOther" maxlength="30" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
-        <app-field-error [field]="carrierOtherRef" />
-      </label>
-    }
-    <label class="text-sm">
-      <span class="font-medium text-slate-700">Servicio</span>
-      <select name="service" #serviceRef="ngModel" [(ngModel)]="form.service" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
-        <option [ngValue]="null">Sin especificar</option>
-        @for (sv of serviceOptions; track sv) {
-          <option [ngValue]="sv">{{ sv }}</option>
-        }
-      </select>
-      <app-field-error [field]="serviceRef" />
-    </label>
-    <label class="text-sm">
-      <span class="font-medium text-slate-700">Estado</span>
-      <select name="ssId" #statusRef="ngModel" [(ngModel)]="form.ssId" required class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
-        <option [ngValue]="null" disabled>Selecciona…</option>
-        @for (st of statuses(); track st.ss_id) {
-          <option [ngValue]="st.ss_id">{{ st.ss_name }}</option>
-        }
-      </select>
-      <app-field-error [field]="statusRef" />
-    </label>
-
-    <label class="text-sm">
-      <span class="font-medium text-slate-700">No. de guía</span>
-      <input name="trackingNum" #trackingRef="ngModel" [(ngModel)]="form.trackingNum" required minlength="4" maxlength="40" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
-      <app-field-error [field]="trackingRef" />
-    </label>
-    <label class="text-sm">
-      <span class="font-medium text-slate-700">Fecha de creación</span>
-      <input type="date" name="creationDate" #creationDateRef="ngModel" [(ngModel)]="form.creationDate" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
-      <app-field-error [field]="creationDateRef" />
-    </label>
-    <label class="text-sm">
-      <span class="font-medium text-slate-700">Remitente</span>
-      <input name="senderName" #senderRef="ngModel" [(ngModel)]="form.senderName" maxlength="30" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
-      <app-field-error [field]="senderRef" />
-    </label>
-    <label class="text-sm">
-      <span class="font-medium text-slate-700">CP origen</span>
-      <input name="senderCp" #senderCpRef="ngModel" [(ngModel)]="form.senderCp" pattern="\d{5}" maxlength="5" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
-      <app-field-error [field]="senderCpRef" patternMessage="Deben ser 5 dígitos." />
-    </label>
-    <label class="text-sm">
-      <span class="font-medium text-slate-700">Destinatario</span>
-      <input name="receiverName" #receiverRef="ngModel" [(ngModel)]="form.receiverName" maxlength="30" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
-      <app-field-error [field]="receiverRef" />
-    </label>
-    <label class="text-sm">
-      <span class="font-medium text-slate-700">CP destino</span>
-      <input name="receiverCp" #cpRef="ngModel" [(ngModel)]="form.receiverCp" pattern="\d{5}" maxlength="5" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
-      <app-field-error [field]="cpRef" patternMessage="Deben ser 5 dígitos." />
-    </label>
-    <label class="text-sm">
-      <span class="font-medium text-slate-700">Peso (kg)</span>
-      <input name="weight" #weightRef="ngModel" [(ngModel)]="form.weight" maxlength="7" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
-      <app-field-error [field]="weightRef" />
-    </label>
-
-    <label class="text-sm">
-      <span class="font-medium text-slate-700">Cliente <span class="text-slate-400">(opcional)</span></span>
-      <select name="customerId" #customerRef="ngModel" [(ngModel)]="form.customerId" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
-        <option [ngValue]="null">Sin cliente</option>
-        @for (c of customers(); track c.customer_id) {
-          <option [ngValue]="c.customer_id">{{ c.name }}</option>
-        }
-      </select>
-    </label>
-    <label class="text-sm">
-      <span class="font-medium text-slate-700">Proveedor <span class="text-slate-400">(opcional)</span></span>
-      <select name="supplierId" #supplierRef="ngModel" [(ngModel)]="form.supplierId" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
-        <option [ngValue]="null">Sin proveedor</option>
-        @for (s of suppliers(); track s.supplier_id) {
-          <option [ngValue]="s.supplier_id">{{ s.name }}</option>
-        }
-      </select>
-    </label>
-    <label class="text-sm">
-      <span class="font-medium text-slate-700">Costo <span class="text-slate-400">(opcional)</span></span>
-      <input name="cost" type="number" #costRef="ngModel" [(ngModel)]="form.cost" min="0" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
-      <app-field-error [field]="costRef" />
-    </label>
-    <label class="text-sm">
-      <span class="font-medium text-slate-700">Precio <span class="text-slate-400">(opcional)</span></span>
-      <input name="price" type="number" #priceRef="ngModel" [(ngModel)]="form.price" min="0" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
-      <app-field-error [field]="priceRef" />
-    </label>
-
-    <div class="md:col-span-3 flex gap-3">
-      <button type="submit" [disabled]="saving() || f.invalid" class="rounded-xl bg-brand-500 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:opacity-60">
-        {{ saving() ? 'Guardando…' : 'Confirmar y guardar' }}
-      </button>
-      <button type="button" (click)="back()" class="rounded-xl border border-slate-200 px-6 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
-        Volver
-      </button>
-    </div>
-  </form>
+  </div>
 }
 
 <!-- Step 3: done -->
 @if (step() === 'done') {
   <div class="mt-6 max-w-md rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
     <div class="rounded-lg bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
-      ✓ Guía registrada correctamente y archivo guardado.
+      ✓ {{ savedCount() }} guía(s) registrada(s) correctamente y archivo(s) guardado(s).
     </div>
     <div class="mt-6 flex gap-3">
       <button (click)="goToShipments()" class="rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-600">
         Ver guías
       </button>
       <button (click)="reset()" class="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
-        Subir otra
+        Subir otras
       </button>
     </div>
   </div>

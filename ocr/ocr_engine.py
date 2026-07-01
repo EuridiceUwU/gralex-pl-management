@@ -32,13 +32,15 @@ def _pdf_embedded_text(content: bytes) -> str:
     Returns "" when poppler is unavailable or the PDF has no text layer.
     Using ``- -`` streams stdin→stdout so no temp files touch the disk, and
     ``-layout`` keeps the spatial arrangement the parser regexes rely on.
+    ``-f 1 -l 1`` restricts extraction to the first page: a guide's label
+    lives on page 1, and later pages (terms, extra copies) only add noise.
     """
     if shutil.which("pdftotext") is None:
         return ""
 
     try:
         proc = subprocess.run(
-            ["pdftotext", "-layout", "-enc", "UTF-8", "-", "-"],
+            ["pdftotext", "-f", "1", "-l", "1", "-layout", "-enc", "UTF-8", "-", "-"],
             input=content,
             capture_output=True,
             timeout=30,
@@ -77,7 +79,8 @@ def extract_text(content: bytes, content_type: str) -> str:
         if len(embedded) >= _MIN_EMBEDDED_CHARS:
             return embedded
 
-        pages = convert_from_bytes(content, dpi=300)
+        # Only the first page carries the label; skip the rest.
+        pages = convert_from_bytes(content, dpi=300, first_page=1, last_page=1)
         return "\n\n".join(_image_to_text(page) for page in pages).strip()
 
     image = Image.open(io.BytesIO(content))

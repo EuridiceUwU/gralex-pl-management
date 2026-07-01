@@ -134,10 +134,10 @@ def _parse_dhl(text: str) -> dict:
     # right-hand column label ("Origin:" / "Contact:").
     sender = _first(r"From\s*:\s*(.+)", text)
     if sender:
-        fields["sender_name"] = _clip(re.split(r"\s{2,}", sender)[0], 30)
+        fields["sender_name"] = _clip(re.split(r"\s{2,}", sender)[0], 70)
     receiver = _first(r"To\s*:\s*(.+)", text)
     if receiver:
-        fields["receiver_name"] = _clip(re.split(r"\s{2,}", receiver)[0], 30)
+        fields["receiver_name"] = _clip(re.split(r"\s{2,}", receiver)[0], 70)
 
     # CP is the 5-digit prefix on the city line of each address block; the
     # sender block is everything before "To :", the receiver block after it.
@@ -157,8 +157,9 @@ def _parse_fedex(text: str) -> dict:
     fields: dict = {}
 
     # The tracking barcode digits sit on the line after "TRK#" (the service
-    # keyword shares the TRK# line). Fall back to any long digit run.
-    tracking = _first(r"TRK#[^\n]*\n\s*([\d][\d ]{8,})", text)
+    # keyword shares the TRK# line), preceded by a fixed 4-digit form/meter
+    # code in its own little box that isn't part of the 12-digit guide number.
+    tracking = _first(r"TRK#[^\n]*\n\s*\d{4}\s+([\d][\d ]{8,}\d)", text)
     if not tracking:
         tracking = _first(r"\b(\d{12,})\b", text)
     if tracking:
@@ -168,10 +169,10 @@ def _parse_fedex(text: str) -> dict:
     # Both lines carry a second right-hand column, so keep only the left part.
     sender = _first(r"ORIGIN ID.*\n\s*(.+)", text)
     if sender:
-        fields["sender_name"] = _clip(re.split(r"\s{2,}", sender)[0], 30)
+        fields["sender_name"] = _clip(re.split(r"\s{2,}", sender)[0], 70)
     receiver = _first(r"^\s*TO\s+(.+)", text, re.MULTILINE)
     if receiver:
-        fields["receiver_name"] = _clip(re.split(r"\s{2,}", receiver)[0], 30)
+        fields["receiver_name"] = _clip(re.split(r"\s{2,}", receiver)[0], 70)
 
     # "CITY, ST 45157" — first pair is the origin, second the destination.
     cps = re.findall(r"[A-Z]{2}\s+(\d{5})\b", text)
@@ -196,7 +197,15 @@ def _parse_estafeta(text: str) -> dict:
 
     # The remitente block is prefixed with a lone "R"; grab the caps name.
     fields["sender_name"] = _clip(
-        _first(r"^\s*R\s+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ ]{3,})", text, re.MULTILINE), 30
+        _first(r"^\s*R\s+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ ]{3,})", text, re.MULTILINE), 70
+    )
+
+    # Unlike remitente, the destinatario name isn't next to its "D" marker
+    # line (that line comes out empty) — it's the line right above it, which
+    # carries the properly spaced duplicate of the (often letter-glued) name
+    # printed one line earlier.
+    fields["receiver_name"] = _clip(
+        _first(r"([A-ZÁÉÍÓÚÑa-záéíóúñ][A-ZÁÉÍÓÚÑa-záéíóúñ ]{3,})\n\s*D\s*\n", text), 70
     )
 
     # Two "CP:NNNNN" appear: first is the sender, second the receiver.
@@ -208,7 +217,9 @@ def _parse_estafeta(text: str) -> dict:
 
     fields["weight"] = _weight(_first(r"([\d.]+)\s*KG", text, re.IGNORECASE))
     fields["service"] = _service(_first(r"\n\s*(Terrestre|Express|Internacional)", text, re.IGNORECASE) or text)
-    fields["creation_date"] = _iso_date(_first(r"Vigencia de gu[ií]a:\s*([\d/]+)", text, re.IGNORECASE))
+    # "Vigencia de guía" is the label's validity date, not its creation date —
+    # Estafeta labels don't expose an actual creation date, so this is left
+    # unset and the caller defaults it to today's date.
     return fields
 
 
@@ -216,8 +227,8 @@ def _parse_paquetexpress(text: str) -> dict:
     fields: dict = {}
 
     fields["tracking_num"] = _first(r"RASTREO PAQUETEXPRESS:\s*([A-Z0-9]+)", text, re.IGNORECASE)
-    fields["sender_name"] = _clip(_first(r"REMITENTE:.*\n\s*(.+)", text), 30)
-    fields["receiver_name"] = _clip(_first(r"DESTINATARIO:.*\n\s*(.+)", text), 30)
+    fields["sender_name"] = _clip(_first(r"REMITENTE:.*\n\s*(.+)", text), 70)
+    fields["receiver_name"] = _clip(_first(r"DESTINATARIO:.*\n\s*(.+)", text), 70)
 
     # The address line carries both "CITY, STATE, NNNNN" segments; first is the
     # sender's CP, second the receiver's.
