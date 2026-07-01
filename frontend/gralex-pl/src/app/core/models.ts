@@ -44,10 +44,19 @@ export interface DashboardResponse {
 export interface Shipment {
   shipment_id: number;
   tracking_num: string;
-  customer_name: string;
-  supplier_name: string;
+  ss_id: number;
   status_name: string;
+  customer_id: number | null;
+  customer_name: string | null;
+  supplier_id: number | null;
+  supplier_name: string | null;
+  sender_name: string | null;
+  receiver_name: string | null;
+  sender_cp: string | null;
+  receiver_cp: string | null;
   weight: string | null;
+  carrier: string | null;
+  carrier_other: string | null;
   service: string | null;
   cost: string | null;
   price: string | null;
@@ -89,9 +98,23 @@ export interface Employee {
   status: boolean;
 }
 
+export interface OcrFields {
+  carrier: string | null;
+  tracking_num: string | null;
+  sender_name: string | null;
+  receiver_name: string | null;
+  sender_cp: string | null;
+  receiver_cp: string | null;
+  weight: string | null;
+  service: string | null;
+  creation_date: string | null;
+  supplier: string | null;
+  cost: string | null;
+}
+
 export interface OcrResult {
   ok: boolean;
   filename: string;
   raw_text: string;
-  fields: Record<string, string | null>;
+  fields: OcrFields;
 }

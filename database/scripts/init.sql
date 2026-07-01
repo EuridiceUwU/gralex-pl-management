@@ -106,11 +106,15 @@ CREATE TABLE "Shipments" (
     "sender_cp" varchar(5),
     "receiver_cp" varchar(5),
     "weight" varchar(7),
+    "carrier" varchar(20),
+    "carrier_other" varchar(30),
     "service" varchar(30),
     "creation_date" date,
     "cost" numeric(8,2),
     "price" numeric(8,2),
-    "created_at" timestamp DEFAULT now()
+    "created_at" timestamp DEFAULT now(),
+    CONSTRAINT "ck_shipment_carrier" CHECK ("carrier" IN ('Fedex', 'DHL', 'Estafeta', 'Paquetexpress', 'Otro')),
+    CONSTRAINT "ck_shipment_service" CHECK ("service" IN ('Express', 'Terrestre', 'Internacional'))
 );
 
 CREATE TABLE "Accounts" (
@@ -219,6 +223,8 @@ SELECT s."shipment_id",
        s."sender_cp",
        s."receiver_cp",
        s."weight",
+       s."carrier",
+       s."carrier_other",
        s."service",
        s."creation_date",
        s."cost",
@@ -624,6 +630,8 @@ CREATE OR REPLACE PROCEDURE sp_shipment_create(
     p_creation_date date,
     p_cost          numeric,
     p_price         numeric,
+    p_carrier       varchar,
+    p_carrier_other varchar,
     OUT new_id      int
 )
 LANGUAGE plpgsql
@@ -634,11 +642,13 @@ BEGIN
     INSERT INTO "Shipments" (
         "ss_id", "created_by", "supplier_id", "customer_id", "minio_id",
         "tracking_num", "sender_name", "receiver_name", "sender_cp", "receiver_cp",
-        "weight", "service", "creation_date", "cost", "price"
+        "weight", "service", "creation_date", "cost", "price",
+        "carrier", "carrier_other"
     ) VALUES (
         p_ss_id, p_created_by, p_supplier_id, p_customer_id, p_minio_id,
         p_tracking_num, p_sender_name, p_receiver_name, p_sender_cp, p_receiver_cp,
-        p_weight, p_service, p_creation_date, p_cost, p_price
+        p_weight, p_service, p_creation_date, p_cost, p_price,
+        p_carrier, p_carrier_other
     )
     RETURNING "shipment_id" INTO new_id;
 END;
@@ -659,6 +669,74 @@ AS $$
 BEGIN
     PERFORM set_config('app.current_user_id', p_user_id::text, true);
     UPDATE "Shipments" SET "supplier_id" = NULL WHERE "shipment_id" = p_id;
+END;
+$$;
+
+-- Full-form edit: the frontend always sends the complete set of fields (same
+-- shape as sp_shipment_create), so every column is set directly rather than
+-- COALESCE'd -- this lets clearing "Proveedor"/"Cliente" back to null work.
+CREATE OR REPLACE PROCEDURE sp_shipment_update(
+    p_id            int,
+    p_ss_id         int,
+    p_supplier_id   int,
+    p_customer_id   int,
+    p_tracking_num  varchar,
+    p_sender_name   varchar,
+    p_receiver_name varchar,
+    p_sender_cp     varchar,
+    p_receiver_cp   varchar,
+    p_weight        varchar,
+    p_service       varchar,
+    p_creation_date date,
+    p_cost          numeric,
+    p_price         numeric,
+    p_carrier       varchar,
+    p_carrier_other varchar,
+    p_user_id       int
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    PERFORM set_config('app.current_user_id', p_user_id::text, true);
+
+    UPDATE "Shipments"
+    SET "ss_id" = p_ss_id,
+        "supplier_id" = p_supplier_id,
+        "customer_id" = p_customer_id,
+        "tracking_num" = p_tracking_num,
+        "sender_name" = p_sender_name,
+        "receiver_name" = p_receiver_name,
+        "sender_cp" = p_sender_cp,
+        "receiver_cp" = p_receiver_cp,
+        "weight" = p_weight,
+        "service" = p_service,
+        "creation_date" = p_creation_date,
+        "cost" = p_cost,
+        "price" = p_price,
+        "carrier" = p_carrier,
+        "carrier_other" = p_carrier_other
+    WHERE "shipment_id" = p_id;
+END;
+$$;
+
+-- Bulk assign: NULL for p_customer_id/p_supplier_id means "leave that field
+-- untouched" for every selected shipment, so callers can assign a customer
+-- only, a supplier only, or both in a single call.
+CREATE OR REPLACE PROCEDURE sp_shipment_assign(
+    p_ids         int[],
+    p_customer_id int,
+    p_supplier_id int,
+    p_user_id     int
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    PERFORM set_config('app.current_user_id', p_user_id::text, true);
+
+    UPDATE "Shipments"
+    SET "customer_id" = COALESCE(p_customer_id, "customer_id"),
+        "supplier_id" = COALESCE(p_supplier_id, "supplier_id")
+    WHERE "shipment_id" = ANY(p_ids);
 END;
 $$;
 

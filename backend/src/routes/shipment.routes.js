@@ -54,7 +54,9 @@ router.get("/statuses", ShipmentController.statuses);
  *               senderCp: { type: string, example: "94500" }
  *               receiverCp: { type: string, example: "06000" }
  *               weight: { type: string, example: "2.5" }
- *               service: { type: string, example: Express }
+ *               carrier: { type: string, enum: [Fedex, DHL, Estafeta, Paquetexpress, Otro], example: DHL }
+ *               carrierOther: { type: string, example: "Paquetería Local SA" }
+ *               service: { type: string, enum: [Express, Terrestre, Internacional], example: Express }
  *               creationDate: { type: string, format: date, example: "2026-06-24" }
  *               cost: { type: number, example: 120.50 }
  *               price: { type: number, example: 180.00 }
@@ -66,8 +68,43 @@ router.post("/", ShipmentController.create);
 
 /**
  * @swagger
+ * /shipments/assign:
+ *   patch:
+ *     summary: Asigna una o varias guías a un cliente y/o proveedor
+ *     tags: [Shipments]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [shipmentIds]
+ *             properties:
+ *               shipmentIds: { type: array, items: { type: integer }, example: [1, 2, 3] }
+ *               customerId: { type: integer, example: 1 }
+ *               supplierId: { type: integer, example: 1 }
+ *     responses:
+ *       200: { description: Guías asignadas }
+ */
+router.patch("/assign", ShipmentController.assign);
+
+/**
+ * @swagger
  * /shipments/{id}:
  *   get: { summary: Obtener guía, tags: [Shipments], parameters: [{ in: path, name: id, required: true, schema: { type: integer } }], responses: { 200: { description: OK } } }
+ *   put:
+ *     summary: Actualizar todos los campos de una guía
+ *     tags: [Shipments]
+ *     parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [ssId, trackingNum]
+ *     responses:
+ *       200: { description: Guía actualizada }
  * /shipments/{id}/status:
  *   patch:
  *     summary: Actualizar el estado de una guía
@@ -86,6 +123,7 @@ router.post("/", ShipmentController.create);
  *       200: { description: Estado actualizado }
  */
 router.get("/:id", ShipmentController.get);
+router.put("/:id", ShipmentController.update);
 router.patch("/:id/status", ShipmentController.updateStatus);
 router.patch("/:id/remove-supplier", ShipmentController.removeSupplier);
 

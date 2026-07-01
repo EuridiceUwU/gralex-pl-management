@@ -85,6 +85,42 @@ router.post("/ocr", upload.single("file"), DocumentController.ocr);
 
 /**
  * @swagger
+ * /documents/confirm-shipment:
+ *   post:
+ *     summary: Confirmar una guía escaneada — sube el archivo a MinIO y crea la guía
+ *     tags: [Documents]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [file, trackingNum]
+ *             properties:
+ *               file: { type: string, format: binary }
+ *               trackingNum: { type: string }
+ *               carrier: { type: string, enum: [Fedex, DHL, Estafeta, Paquetexpress, Otro] }
+ *               carrierOther: { type: string }
+ *               service: { type: string, enum: [Express, Terrestre, Internacional] }
+ *               senderName: { type: string }
+ *               receiverName: { type: string }
+ *               senderCp: { type: string }
+ *               receiverCp: { type: string }
+ *               weight: { type: string }
+ *               creationDate: { type: string, format: date }
+ *               ssId: { type: integer }
+ *               customerId: { type: integer }
+ *               supplierId: { type: integer }
+ *               cost: { type: number }
+ *               price: { type: number }
+ *     responses:
+ *       201: { description: Guía registrada }
+ *       400: { description: Datos inválidos }
+ */
+router.post("/confirm-shipment", upload.single("file"), DocumentController.confirmShipment);
+
+/**
+ * @swagger
  * /documents/url:
  *   get:
  *     summary: Obtener una URL firmada de descarga
