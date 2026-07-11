@@ -1,10 +1,4 @@
-"""OCR engine wrapper.
-
-This module turns an uploaded PDF or image into raw text. It uses Tesseract by
-default (lightweight, ships in the Docker image) with an OpenCV preprocessing
-pass to improve accuracy. PaddleOCR / docTR or a cloud OCR (Google Vision, AWS
-Textract) can be swapped in here later without touching the API layer.
-"""
+"""wrapper del motor de ocr"""
 
 from __future__ import annotations
 
@@ -18,23 +12,16 @@ import pytesseract
 from PIL import Image
 from pdf2image import convert_from_bytes
 
-# Tesseract language packs to use. Spanish + English covers most guías.
+# Configuracion de idioma tesseract
 _LANGS = "spa+eng"
 
-# Below this many characters we assume the PDF has no usable text layer
-# (image-only scan) and fall back to rasterizing + Tesseract.
+
+# escaneo de imagen rasterizar + Tesseract.
 _MIN_EMBEDDED_CHARS = 20
 
 
 def _pdf_embedded_text(content: bytes) -> str:
-    """Extract a PDF's embedded text layer via poppler's pdftotext.
-
-    Returns "" when poppler is unavailable or the PDF has no text layer.
-    Using ``- -`` streams stdin→stdout so no temp files touch the disk, and
-    ``-layout`` keeps the spatial arrangement the parser regexes rely on.
-    ``-f 1 -l 1`` restricts extraction to the first page: a guide's label
-    lives on page 1, and later pages (terms, extra copies) only add noise.
-    """
+    """Extrae la capa de texto de un PDF usando pdftotext de poppler"""
     if shutil.which("pdftotext") is None:
         return ""
 
@@ -55,10 +42,10 @@ def _pdf_embedded_text(content: bytes) -> str:
 
 
 def _preprocess(image: Image.Image) -> np.ndarray:
-    """Grayscale + adaptive threshold to make text crisper for the OCR pass."""
+    """Escala de grises + umbral para que el texto quede más nítido"""
     rgb = np.array(image.convert("RGB"))
     gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
-    # Otsu binarization handles uneven lighting on phone photos of guías.
+    # La binarización de Otsu ayuda con la iluminación despareja de las fotos tomadas con el celular.
     _, binarized = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     return binarized
 
@@ -69,17 +56,12 @@ def _image_to_text(image: Image.Image) -> str:
 
 
 def extract_text(content: bytes, content_type: str) -> str:
-    """Extract raw text from an uploaded file (PDF or image).
-
-    For PDFs we prefer the embedded text layer (fast and accurate); only when
-    it is missing (image-only scan) do we rasterize and run Tesseract.
-    """
+    #extrae el texto crudo del archivo
     if content_type == "application/pdf" or content_type.endswith("pdf"):
         embedded = _pdf_embedded_text(content)
         if len(embedded) >= _MIN_EMBEDDED_CHARS:
             return embedded
-
-        # Only the first page carries the label; skip the rest.
+        # Solo se toma la primera página del pdf y el resto no
         pages = convert_from_bytes(content, dpi=300, first_page=1, last_page=1)
         return "\n\n".join(_image_to_text(page) for page in pages).strip()
 

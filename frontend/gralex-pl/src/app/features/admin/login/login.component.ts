@@ -11,11 +11,12 @@ import { FieldErrorComponent } from '../../../shared/field-error.component';
   templateUrl: './login.component.html',
 })
 export class LoginComponent {
-  email = 'admin@gralex.com';
-  password = 'admin123';
+  email = '';
+  password = '';
 
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
+  readonly showPassword = signal(false);
 
   constructor(
     private readonly auth: AuthService,
