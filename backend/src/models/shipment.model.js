@@ -22,7 +22,7 @@ export const listStatuses = async () => {
 // re-fetched with getShipment so the response uses the real column names.
 export const createShipment = async (s) => {
   const { rows } = await pool.query(
-    "CALL sp_shipment_create($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NULL)",
+    "CALL sp_shipment_create($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NULL)",
     [
       s.ssId,
       s.createdBy,
@@ -39,6 +39,8 @@ export const createShipment = async (s) => {
       s.creationDate,
       s.cost,
       s.price,
+      s.carrier,
+      s.carrierOther,
     ],
   );
   return getShipment(rows[0].new_id);
@@ -54,4 +56,43 @@ export const updateStatus = async (id, ssId, userId) => {
 export const removeSupplier = async (id, userId) => {
   await pool.query("CALL sp_shipment_remove_supplier($1, $2)", [id, userId]);
   return getShipment(id);
+};
+
+// sp_shipment_update is a void procedure; it sets every column directly
+// (full-form edit), so callers must send the complete shipment shape.
+export const updateShipment = async (id, s, userId) => {
+  await pool.query(
+    "CALL sp_shipment_update($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)",
+    [
+      id,
+      s.ssId,
+      s.supplierId,
+      s.customerId,
+      s.trackingNum,
+      s.senderName,
+      s.receiverName,
+      s.senderCp,
+      s.receiverCp,
+      s.weight,
+      s.service,
+      s.creationDate,
+      s.cost,
+      s.price,
+      s.carrier,
+      s.carrierOther,
+      userId,
+    ],
+  );
+  return getShipment(id);
+};
+
+// sp_shipment_assign is a void procedure; NULL customerId/supplierId leaves
+// that field untouched on every selected shipment.
+export const assignShipments = async (ids, customerId, supplierId, userId) => {
+  await pool.query("CALL sp_shipment_assign($1, $2, $3, $4)", [ids, customerId, supplierId, userId]);
+  const { rows } = await pool.query(
+    'SELECT * FROM "vw_shipments_detail" WHERE "shipment_id" = ANY($1) ORDER BY "shipment_id" DESC',
+    [ids],
+  );
+  return rows;
 };

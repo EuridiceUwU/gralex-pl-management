@@ -4,7 +4,7 @@
     <p class="text-sm text-slate-500">Listado y registro de envíos.</p>
   </div>
   <button
-    (click)="showForm.set(!showForm())"
+    (click)="showForm() ? cancelForm() : showForm.set(true)"
     class="rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-600"
   >
     {{ showForm() ? 'Cerrar' : '+ Nueva guía' }}
@@ -47,14 +47,56 @@
       <app-field-error [field]="trackingRef" />
     </label>
     <label class="text-sm">
+      <span class="font-medium text-slate-700">Fecha de creación</span>
+      <input type="date" name="creationDate" #creationDateRef="ngModel" [(ngModel)]="form.creationDate" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
+      <app-field-error [field]="creationDateRef" />
+    </label>
+    <label class="text-sm">
+      <span class="font-medium text-slate-700">Remitente</span>
+      <input name="senderName" #senderRef="ngModel" [(ngModel)]="form.senderName" maxlength="70" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
+      <app-field-error [field]="senderRef" />
+    </label>
+    <label class="text-sm">
+      <span class="font-medium text-slate-700">CP origen</span>
+      <input name="senderCp" #senderCpRef="ngModel" [(ngModel)]="form.senderCp" pattern="\d{5}" maxlength="5" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
+      <app-field-error [field]="senderCpRef" patternMessage="Deben ser 5 dígitos." />
+    </label>
+    <label class="text-sm">
       <span class="font-medium text-slate-700">Destinatario</span>
-      <input name="receiverName" #receiverRef="ngModel" [(ngModel)]="form.receiverName" maxlength="30" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
+      <input name="receiverName" #receiverRef="ngModel" [(ngModel)]="form.receiverName" maxlength="70" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
       <app-field-error [field]="receiverRef" />
     </label>
     <label class="text-sm">
       <span class="font-medium text-slate-700">CP destino</span>
       <input name="receiverCp" #cpRef="ngModel" [(ngModel)]="form.receiverCp" pattern="\d{5}" maxlength="5" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
       <app-field-error [field]="cpRef" patternMessage="Deben ser 5 dígitos." />
+    </label>
+    <label class="text-sm">
+      <span class="font-medium text-slate-700">Paquetería</span>
+      <select name="carrier" #carrierRef="ngModel" [(ngModel)]="form.carrier" (ngModelChange)="onCarrierChange()" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
+        <option [ngValue]="null">Sin especificar</option>
+        @for (c of carrierOptions; track c) {
+          <option [ngValue]="c">{{ c }}</option>
+        }
+      </select>
+      <app-field-error [field]="carrierRef" />
+    </label>
+    @if (form.carrier === 'Otro') {
+      <label class="text-sm">
+        <span class="font-medium text-slate-700">¿Cuál paquetería?</span>
+        <input name="carrierOther" #carrierOtherRef="ngModel" [(ngModel)]="form.carrierOther" maxlength="30" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
+        <app-field-error [field]="carrierOtherRef" />
+      </label>
+    }
+    <label class="text-sm">
+      <span class="font-medium text-slate-700">Servicio</span>
+      <select name="service" #serviceRef="ngModel" [(ngModel)]="form.service" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
+        <option [ngValue]="null">Sin especificar</option>
+        @for (sv of serviceOptions; track sv) {
+          <option [ngValue]="sv">{{ sv }}</option>
+        }
+      </select>
+      <app-field-error [field]="serviceRef" />
     </label>
     <label class="text-sm">
       <span class="font-medium text-slate-700">Peso (kg)</span>
@@ -71,45 +113,166 @@
       <input name="price" type="number" #priceRef="ngModel" [(ngModel)]="form.price" min="0" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
       <app-field-error [field]="priceRef" />
     </label>
-    <div class="md:col-span-3">
+    <div class="md:col-span-3 flex gap-3">
       <button type="submit" [disabled]="saving() || f.invalid" class="rounded-xl bg-brand-500 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:opacity-60">
-        {{ saving() ? 'Guardando…' : 'Guardar guía' }}
+        {{ saving() ? 'Guardando…' : (editingId() ? 'Actualizar' : 'Guardar guía') }}
+      </button>
+      <button type="button" (click)="cancelForm()" class="rounded-xl border border-slate-200 px-6 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
+        Cancelar
       </button>
     </div>
   </form>
 }
 
-<div class="mt-6 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
+<div class="mt-4 flex flex-wrap items-center gap-3">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5 text-slate-400">
+    <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+  </svg>
+  <input
+    type="text"
+    placeholder="Buscar por guía, cliente, proveedor, paquetería, servicio o estado…"
+    [ngModel]="search()"
+    (ngModelChange)="search.set($event)"
+    class="w-full max-w-md rounded-lg border border-slate-200 px-3 py-2 text-sm placeholder-slate-400 focus:border-brand-400 focus:outline-none"
+  />
+</div>
+
+@if (selectedIds().size > 0) {
+  <div class="mt-4 flex items-center justify-between rounded-2xl border border-brand-100 bg-brand-50 px-4 py-3">
+    <p class="text-sm font-medium text-brand-700">{{ selectedIds().size }} guía(s) seleccionada(s)</p>
+    <div class="flex gap-2">
+      <button (click)="openAssign()" class="rounded-lg bg-brand-500 px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-600">
+        Asignar cliente / proveedor
+      </button>
+      <button (click)="clearSelection()" class="rounded-lg border border-slate-200 px-4 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50">
+        Cancelar selección
+      </button>
+    </div>
+  </div>
+}
+
+<div class="mt-4 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
   @if (loading()) {
     <p class="p-6 text-slate-500">Cargando…</p>
   } @else {
     <table class="w-full text-left text-sm">
       <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
         <tr>
+          <th class="px-4 py-3">
+            <input type="checkbox" [checked]="allFilteredSelected()" (change)="toggleSelectAll()" class="h-4 w-4 rounded border-slate-300" />
+          </th>
+          <th class="px-4 py-3">Fecha</th>
           <th class="px-4 py-3">Guía</th>
           <th class="px-4 py-3">Cliente</th>
           <th class="px-4 py-3">Proveedor</th>
-          <th class="px-4 py-3">Estado</th>
-          <th class="px-4 py-3">Peso</th>
+          <th class="px-4 py-3">Paquetería</th>
+          <th class="px-4 py-3">Servicio</th>
+          <th class="px-4 py-3 text-right">Costo</th>
           <th class="px-4 py-3 text-right">Precio</th>
+          <th class="px-4 py-3">Estado</th>
+          <th class="px-4 py-3"></th>
         </tr>
       </thead>
       <tbody class="divide-y divide-slate-100">
-        @for (s of shipments(); track s.shipment_id) {
+        @for (s of filtered(); track s.shipment_id) {
           <tr class="transition hover:bg-slate-50">
+            <td class="px-4 py-3">
+              <input type="checkbox" [checked]="isSelected(s.shipment_id)" (change)="toggleSelect(s.shipment_id)" class="h-4 w-4 rounded border-slate-300" />
+            </td>
+            <td class="px-4 py-3">{{ (s.creation_date | date: 'dd/MM/yyyy' : 'UTC') || '—' }}</td>
             <td class="px-4 py-3 font-medium text-slate-800">{{ s.tracking_num }}</td>
             <td class="px-4 py-3">{{ s.customer_name || '—' }}</td>
             <td class="px-4 py-3">{{ s.supplier_name || '—' }}</td>
-            <td class="px-4 py-3">
-              <span class="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700">{{ s.status_name }}</span>
-            </td>
-            <td class="px-4 py-3">{{ s.weight || '—' }}</td>
+            <td class="px-4 py-3">{{ s.carrier === 'Otro' ? (s.carrier_other || 'Otro') : (s.carrier || '—') }}</td>
+            <td class="px-4 py-3">{{ s.service || '—' }}</td>
+            <td class="px-4 py-3 text-right">{{ s.cost ? ('$' + (s.cost | number: '1.2-2')) : '—' }}</td>
             <td class="px-4 py-3 text-right font-semibold">{{ s.price ? ('$' + (s.price | number: '1.2-2')) : '—' }}</td>
+            <td class="px-4 py-3">
+              @if (s.status_name === 'Cancelado') {
+                <span class="rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700">{{ s.status_name }}</span>
+              } @else {
+                <span class="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700">{{ s.status_name }}</span>
+              }
+            </td>
+            <td class="px-4 py-3 text-right">
+              <div class="flex gap-2 justify-end">
+                <button (click)="startEdit(s)" class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50">
+                  Editar
+                </button>
+                @if (s.status_name !== 'Cancelado') {
+                  <button (click)="confirmCancel(s)" class="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50">
+                    Cancelar
+                  </button>
+                }
+              </div>
+            </td>
           </tr>
         } @empty {
-          <tr><td colspan="6" class="px-4 py-8 text-center text-slate-400">No hay guías registradas.</td></tr>
+          <tr><td colspan="11" class="px-4 py-8 text-center text-slate-400">No hay guías registradas.</td></tr>
         }
       </tbody>
     </table>
   }
 </div>
+
+@if (showAssign()) {
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+    <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+      <h3 class="text-lg font-bold text-slate-800">Asignar guías</h3>
+      <p class="mt-2 text-sm text-slate-600">
+        Asigna las {{ selectedIds().size }} guía(s) seleccionada(s) a un cliente y/o proveedor.
+      </p>
+      <div class="mt-4 grid gap-4">
+        <label class="text-sm">
+          <span class="font-medium text-slate-700">Cliente</span>
+          <select name="assignCustomerId" [(ngModel)]="assignForm.customerId" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
+            <option [ngValue]="null">Sin cambios</option>
+            @for (c of customers(); track c.customer_id) {
+              <option [ngValue]="c.customer_id">{{ c.name }}</option>
+            }
+          </select>
+        </label>
+        <label class="text-sm">
+          <span class="font-medium text-slate-700">Proveedor</span>
+          <select name="assignSupplierId" [(ngModel)]="assignForm.supplierId" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
+            <option [ngValue]="null">Sin cambios</option>
+            @for (s of suppliers(); track s.supplier_id) {
+              <option [ngValue]="s.supplier_id">{{ s.name }}</option>
+            }
+          </select>
+        </label>
+      </div>
+      <div class="mt-6 flex justify-end gap-3">
+        <button (click)="cancelAssign()" class="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
+          Cancelar
+        </button>
+        <button
+          (click)="confirmAssign()"
+          [disabled]="assigning() || (!assignForm.customerId && !assignForm.supplierId)"
+          class="rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:opacity-60"
+        >
+          {{ assigning() ? 'Asignando…' : 'Asignar' }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (cancelTarget(); as s) {
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+    <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+      <h3 class="text-lg font-bold text-slate-800">Cancelar guía</h3>
+      <p class="mt-2 text-sm text-slate-600">
+        ¿Estás seguro de cancelar la guía <strong>{{ s.tracking_num }}</strong>?
+      </p>
+      <div class="mt-6 flex justify-end gap-3">
+        <button (click)="dismissCancel()" class="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
+          No
+        </button>
+        <button (click)="executeCancel()" class="rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700">
+          Sí, cancelar
+        </button>
+      </div>
+    </div>
+  </div>
+}

@@ -9,6 +9,8 @@ Textract) can be swapped in here later without touching the API layer.
 from __future__ import annotations
 
 import io
+import shutil
+import subprocess
 
 import cv2
 import numpy as np
@@ -18,6 +20,38 @@ from pdf2image import convert_from_bytes
 
 # Tesseract language packs to use. Spanish + English covers most guías.
 _LANGS = "spa+eng"
+
+# Below this many characters we assume the PDF has no usable text layer
+# (image-only scan) and fall back to rasterizing + Tesseract.
+_MIN_EMBEDDED_CHARS = 20
+
+
+def _pdf_embedded_text(content: bytes) -> str:
+    """Extract a PDF's embedded text layer via poppler's pdftotext.
+
+    Returns "" when poppler is unavailable or the PDF has no text layer.
+    Using ``- -`` streams stdin→stdout so no temp files touch the disk, and
+    ``-layout`` keeps the spatial arrangement the parser regexes rely on.
+    ``-f 1 -l 1`` restricts extraction to the first page: a guide's label
+    lives on page 1, and later pages (terms, extra copies) only add noise.
+    """
+    if shutil.which("pdftotext") is None:
+        return ""
+
+    try:
+        proc = subprocess.run(
+            ["pdftotext", "-f", "1", "-l", "1", "-layout", "-enc", "UTF-8", "-", "-"],
+            input=content,
+            capture_output=True,
+            timeout=30,
+        )
+    except (subprocess.SubprocessError, OSError):
+        return ""
+
+    if proc.returncode != 0:
+        return ""
+
+    return proc.stdout.decode("utf-8", errors="replace").strip()
 
 
 def _preprocess(image: Image.Image) -> np.ndarray:
@@ -35,9 +69,18 @@ def _image_to_text(image: Image.Image) -> str:
 
 
 def extract_text(content: bytes, content_type: str) -> str:
-    """Extract raw text from an uploaded file (PDF or image)."""
+    """Extract raw text from an uploaded file (PDF or image).
+
+    For PDFs we prefer the embedded text layer (fast and accurate); only when
+    it is missing (image-only scan) do we rasterize and run Tesseract.
+    """
     if content_type == "application/pdf" or content_type.endswith("pdf"):
-        pages = convert_from_bytes(content, dpi=300)
+        embedded = _pdf_embedded_text(content)
+        if len(embedded) >= _MIN_EMBEDDED_CHARS:
+            return embedded
+
+        # Only the first page carries the label; skip the rest.
+        pages = convert_from_bytes(content, dpi=300, first_page=1, last_page=1)
         return "\n\n".join(_image_to_text(page) for page in pages).strip()
 
     image = Image.open(io.BytesIO(content))

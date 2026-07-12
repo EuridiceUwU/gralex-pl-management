@@ -40,6 +40,17 @@ export class ApiService {
     return this.http.post(`${API_BASE}/shipments`, payload);
   }
 
+  updateShipment(id: number, payload: unknown): Observable<unknown> {
+    return this.http.put(`${API_BASE}/shipments/${id}`, payload);
+  }
+
+  assignShipments(
+    shipmentIds: number[],
+    target: { customerId?: number | null; supplierId?: number | null },
+  ): Observable<unknown> {
+    return this.http.patch(`${API_BASE}/shipments/assign`, { shipmentIds, ...target });
+  }
+
   // Customers
   customers(): Observable<{ customers: Customer[] }> {
     return this.http.get<{ customers: Customer[] }>(`${API_BASE}/customers`);
@@ -104,5 +115,9 @@ export class ApiService {
 
   runOcr(form: FormData): Observable<OcrResult> {
     return this.http.post<OcrResult>(`${API_BASE}/documents/ocr`, form);
+  }
+
+  confirmShipmentFromGuide(form: FormData): Observable<unknown> {
+    return this.http.post(`${API_BASE}/documents/confirm-shipment`, form);
   }
 }
