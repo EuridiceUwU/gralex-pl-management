@@ -1,9 +1,4 @@
-"""Gralex OCR microservice (FastAPI).
-
-Exposes a single extraction endpoint used by the Node backend. It returns the
-raw OCR text plus a (currently empty) structured `fields` object that is ready
-to be filled in once the guía layouts are mapped in parser.py.
-"""
+"""API OCR de Gralex PL"""
 
 from __future__ import annotations
 
@@ -51,7 +46,7 @@ async def ocr_extract(file: UploadFile = File(...)) -> JSONResponse:
 
     try:
         raw_text = extract_text(content, content_type)
-    except Exception as exc:  # noqa: BLE001 - surface any OCR failure to the caller
+    except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Error de OCR: {exc}") from exc
 
     return JSONResponse(
@@ -59,7 +54,6 @@ async def ocr_extract(file: UploadFile = File(...)) -> JSONResponse:
             "filename": file.filename,
             "content_type": content_type,
             "raw_text": raw_text,
-            # Empty for now — see parser.py (extraction not implemented yet).
             "fields": parse_fields(raw_text),
         }
     )

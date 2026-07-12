@@ -1,14 +1,4 @@
-"""Field parser for shipping guides (guías).
-
-Maps the raw text produced by the OCR engine (ideally the PDF's embedded text
-layer, preserved with ``pdftotext -layout``) to structured guía fields.
-
-The label formats differ per carrier, so we first detect the carrier from
-distinctive markers and then run a carrier-specific extractor. Every string is
-length-clipped to the corresponding DB column width and every enum-like value
-(carrier, service) is constrained to the values the DB CHECK constraints allow,
-so the downstream INSERT can never fail on a bad value.
-"""
+"""Parser de campos para las guías por paqueteria"""
 
 from __future__ import annotations
 
@@ -18,21 +8,21 @@ from typing import Optional, TypedDict
 
 
 class GuideFields(TypedDict):
-    carrier: Optional[str]          # Fedex | DHL | Estafeta | Paquetexpress | Otro
+    carrier: Optional[str]
     tracking_num: Optional[str]
     sender_name: Optional[str]
     receiver_name: Optional[str]
     sender_cp: Optional[str]
     receiver_cp: Optional[str]
     weight: Optional[str]
-    service: Optional[str]          # Express | Terrestre | Internacional | None
-    creation_date: Optional[str]    # ISO 'YYYY-MM-DD' or None
-    supplier: Optional[str]         # kept for backwards compatibility
-    cost: Optional[str]             # kept for backwards compatibility
+    service: Optional[str]
+    creation_date: Optional[str]
+    supplier: Optional[str]
+    cost: Optional[str]
 
-
+"""Se regresan los campos con todo vacío"""
 def empty_fields() -> GuideFields:
-    """Return the field structure with everything unset."""
+
     return GuideFields(
         carrier=None,
         tracking_num=None,
@@ -48,10 +38,10 @@ def empty_fields() -> GuideFields:
     )
 
 
-# --- shared helpers ---------------------------------------------------------
-
+#  helpers
+"""Recorta espacios, quitar espacios en blanco """
 def _clip(value: Optional[str], maxlen: int) -> Optional[str]:
-    """Trim, collapse whitespace and cut to a DB column width. None stays None."""
+
     if value is None:
         return None
     cleaned = re.sub(r"\s+", " ", value).strip()
@@ -60,19 +50,19 @@ def _clip(value: Optional[str], maxlen: int) -> Optional[str]:
 
 
 def _weight(text: Optional[str]) -> Optional[str]:
-    """First numeric token, kept short enough for the weight varchar(7) column."""
     if not text:
         return None
     match = re.search(r"(\d+(?:\.\d+)?)", text)
     return match.group(1)[:7] if match else None
 
 
+#tipos de servicios express y terrestre
 _SERVICE_EXPRESS = ("EXPRESS", "OVERNIGHT", "PRIORITY", "MYDHL")
 _SERVICE_GROUND = ("ECONOMY", "GROUND", "TERRESTRE", "STANDARD")
 
-
+"""sirve para encontrar el servicio si es express o terrestre"""
 def _service(text: Optional[str]) -> Optional[str]:
-    """Map free service text to a DB-allowed value; never guesses Internacional."""
+
     if not text:
         return None
     upper = text.upper()
@@ -85,9 +75,8 @@ def _service(text: Optional[str]) -> Optional[str]:
 
 _DATE_FORMATS = ("%d%b%y", "%d/%m/%Y", "%Y-%m-%d", "%d/%m/%y")
 
-
+"""se convierten los varios tipos de fecha en un formato estandar (yyyy-mm-dd)"""
 def _iso_date(raw: Optional[str]) -> Optional[str]:
-    """Parse the carriers' date formats (28JAN26, 07/11/2025, 2026-01-07) to ISO."""
     if not raw:
         return None
     token = raw.strip().upper().replace(" ", "")
@@ -104,16 +93,14 @@ def _first(pattern: str, text: str, flags: int = 0, group: int = 1) -> Optional[
     return match.group(group) if match else None
 
 
-# --- carrier detection ------------------------------------------------------
+# --- detección de paquetería --------------------------------------------------
 
 def detect_carrier(raw_text: str) -> str:
-    """Identify the carrier from distinctive markers in the label text."""
     upper = raw_text.upper()
     if "MYDHL" in upper or "EXPRESS DOMESTIC" in upper or "WAYBILL" in upper:
         return "DHL"
     if "ORIGIN ID" in upper or "TRK#" in upper or "ACTWGT" in upper:
         return "Fedex"
-    # Check Paquetexpress before Estafeta (its contract text mentions neither).
     if "PAQUETEXPRESS" in upper:
         return "Paquetexpress"
     if "ESTAFETA" in upper or "CÓDIGO DE RASTREO" in upper or "CODIGO DE RASTREO" in upper:
@@ -121,7 +108,7 @@ def detect_carrier(raw_text: str) -> str:
     return "Otro"
 
 
-# --- per-carrier extractors -------------------------------------------------
+# --- extractores por paquetería -----------------------------------------------
 
 def _parse_dhl(text: str) -> dict:
     fields: dict = {}
@@ -130,8 +117,8 @@ def _parse_dhl(text: str) -> dict:
     if tracking:
         fields["tracking_num"] = re.sub(r"\s+", "", tracking)
 
-    # The name sits inline on the "From :" / "To :" line; strip the trailing
-    # right-hand column label ("Origin:" / "Contact:").
+    # nombres del remientente y destinatario vienen en la columna izquierda
+
     sender = _first(r"From\s*:\s*(.+)", text)
     if sender:
         fields["sender_name"] = _clip(re.split(r"\s{2,}", sender)[0], 70)
@@ -139,8 +126,9 @@ def _parse_dhl(text: str) -> dict:
     if receiver:
         fields["receiver_name"] = _clip(re.split(r"\s{2,}", receiver)[0], 70)
 
-    # CP is the 5-digit prefix on the city line of each address block; the
-    # sender block is everything before "To :", the receiver block after it.
+    # El CP son 5 dígitos al inicio de la línea de ciudad
+    # el bloque del remitente es todo lo que va antes de To : y el
+    # del destinatario todo lo que va después.
     split = re.split(r"\bTo\s*:", text, maxsplit=1)
     if split:
         fields["sender_cp"] = _first(r"^\s*(\d{5})\b", split[0], re.MULTILINE)
@@ -156,17 +144,16 @@ def _parse_dhl(text: str) -> dict:
 def _parse_fedex(text: str) -> dict:
     fields: dict = {}
 
-    # The tracking barcode digits sit on the line after "TRK#" (the service
-    # keyword shares the TRK# line), preceded by a fixed 4-digit form/meter
-    # code in its own little box that isn't part of the 12-digit guide number.
+    # Los dígitos del número de rastreo van en la línea siguiente a TRK#, pero los primeros 4 no son de la guia
+    # número de guía de 12 dígitos.
     tracking = _first(r"TRK#[^\n]*\n\s*\d{4}\s+([\d][\d ]{8,}\d)", text)
     if not tracking:
         tracking = _first(r"\b(\d{12,})\b", text)
     if tracking:
         fields["tracking_num"] = re.sub(r"\s+", "", tracking.strip())[:40]
 
-    # Sender is the line under "ORIGIN ID"; receiver the line after "TO".
-    # Both lines carry a second right-hand column, so keep only the left part.
+    # El remitente es la línea debajo de ORIGIN ID el destinatario la línea después de TO
+
     sender = _first(r"ORIGIN ID.*\n\s*(.+)", text)
     if sender:
         fields["sender_name"] = _clip(re.split(r"\s{2,}", sender)[0], 70)
@@ -174,7 +161,7 @@ def _parse_fedex(text: str) -> dict:
     if receiver:
         fields["receiver_name"] = _clip(re.split(r"\s{2,}", receiver)[0], 70)
 
-    # "CITY, ST 45157" — first pair is the origin, second the destination.
+    # CITY, ST 45157 — el primer par es el origen, el segundo el destino.
     cps = re.findall(r"[A-Z]{2}\s+(\d{5})\b", text)
     if cps:
         fields["sender_cp"] = cps[0]
@@ -195,20 +182,18 @@ def _parse_estafeta(text: str) -> dict:
 
     fields["tracking_num"] = _first(r"Rastreo:\s*([A-Z0-9]+)", text, re.IGNORECASE)
 
-    # The remitente block is prefixed with a lone "R"; grab the caps name.
+    # El bloque del remitente esta por la "R" sola y se toma el nombre en mayúsculas
     fields["sender_name"] = _clip(
         _first(r"^\s*R\s+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ ]{3,})", text, re.MULTILINE), 70
     )
 
-    # Unlike remitente, the destinatario name isn't next to its "D" marker
-    # line (that line comes out empty) — it's the line right above it, which
-    # carries the properly spaced duplicate of the (often letter-glued) name
-    # printed one line earlier.
+
+    # El destinatario esta en la línea junto a la "D" justo arriba
     fields["receiver_name"] = _clip(
         _first(r"([A-ZÁÉÍÓÚÑa-záéíóúñ][A-ZÁÉÍÓÚÑa-záéíóúñ ]{3,})\n\s*D\s*\n", text), 70
     )
 
-    # Two "CP:NNNNN" appear: first is the sender, second the receiver.
+    # Aparecen dos CPs, el primero es el del remitente y el segundo del destinatario.
     cps = re.findall(r"CP:\s*(\d{5})", text)
     if cps:
         fields["sender_cp"] = cps[0]
@@ -217,9 +202,6 @@ def _parse_estafeta(text: str) -> dict:
 
     fields["weight"] = _weight(_first(r"([\d.]+)\s*KG", text, re.IGNORECASE))
     fields["service"] = _service(_first(r"\n\s*(Terrestre|Express|Internacional)", text, re.IGNORECASE) or text)
-    # "Vigencia de guía" is the label's validity date, not its creation date —
-    # Estafeta labels don't expose an actual creation date, so this is left
-    # unset and the caller defaults it to today's date.
     return fields
 
 
@@ -230,8 +212,7 @@ def _parse_paquetexpress(text: str) -> dict:
     fields["sender_name"] = _clip(_first(r"REMITENTE:.*\n\s*(.+)", text), 70)
     fields["receiver_name"] = _clip(_first(r"DESTINATARIO:.*\n\s*(.+)", text), 70)
 
-    # The address line carries both "CITY, STATE, NNNNN" segments; first is the
-    # sender's CP, second the receiver's.
+    # primer cp es el CP del remitente, el segundo el del destinatario.
     cps = re.findall(r",\s*(\d{5})\b", text)
     if cps:
         fields["sender_cp"] = cps[0]
@@ -253,7 +234,7 @@ _EXTRACTORS = {
 
 
 def parse_fields(raw_text: str) -> GuideFields:
-    """Detect the carrier and extract structured guía fields from OCR text."""
+    #Detecta la paquetería y extrae los campos segun la paqueteria que es
     fields = empty_fields()
 
     carrier = detect_carrier(raw_text or "")
@@ -264,9 +245,9 @@ def parse_fields(raw_text: str) -> GuideFields:
         extracted = extractor(raw_text)
         for key, value in extracted.items():
             if value:
-                fields[key] = value  # type: ignore[literal-required]
+                fields[key] = value
 
-    # Length-safe defaults for the CP columns (varchar(5)).
+    # Se recortan los CP para que quepan en unvarchar(5)
     fields["sender_cp"] = _clip(fields["sender_cp"], 5)
     fields["receiver_cp"] = _clip(fields["receiver_cp"], 5)
 

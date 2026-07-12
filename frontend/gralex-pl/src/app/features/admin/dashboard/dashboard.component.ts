@@ -35,7 +35,7 @@ export class DashboardComponent implements OnInit {
     return [
       { label: 'Guías totales', value: s.total_shipments, suffix: '', accent: 'bg-brand-500' },
       { label: 'Ingresos', value: Number(s.total_revenue), prefix: '$', accent: 'bg-emerald-500' },
-      { label: 'Margen', value: Number(s.total_margin), prefix: '$', accent: 'bg-indigo-500' },
+      { label: 'Margen', value: Number(s.total_margin), prefix: '$', accent: 'bg-brand-700' },
       { label: 'Clientes', value: s.total_customers, suffix: '', accent: 'bg-amber-500' },
     ];
   }
