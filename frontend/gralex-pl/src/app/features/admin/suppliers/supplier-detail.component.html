@@ -49,6 +49,7 @@
     <table class="w-full text-left text-sm">
       <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
         <tr>
+          <th class="px-4 py-3">Fecha</th>
           <th class="px-4 py-3">Guía</th>
           <th class="px-4 py-3">Cliente</th>
           <th class="px-4 py-3">Estado</th>
@@ -61,6 +62,7 @@
       <tbody class="divide-y divide-slate-100">
         @for (sh of filteredShipments(); track sh.shipment_id) {
           <tr class="transition hover:bg-slate-50">
+            <td class="px-4 py-3 whitespace-nowrap">{{ sh.creation_date ? (sh.creation_date | date: 'dd/MM/yyyy') : '—' }}</td>
             <td class="px-4 py-3 font-medium text-slate-800">{{ sh.tracking_num }}</td>
             <td class="px-4 py-3">{{ sh.customer_name || '—' }}</td>
             <td class="px-4 py-3">
@@ -71,23 +73,45 @@
               }
             </td>
             <td class="px-4 py-3">{{ sh.weight || '—' }}</td>
-            <td class="px-4 py-3 text-right">{{ sh.cost ? ('$' + (sh.cost | number: '1.2-2')) : '—' }}</td>
-            <td class="px-4 py-3 text-right font-semibold">{{ sh.price ? ('$' + (sh.price | number: '1.2-2')) : '—' }}</td>
-            <td class="px-4 py-3 text-right">
-              <div class="flex gap-2 justify-end">
-                @if (sh.status_name !== 'Cancelado') {
-                  <button (click)="confirmCancel(sh)" class="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50">
+            @if (editingRowId() === sh.shipment_id) {
+              <td class="px-4 py-3 text-right">
+                <input type="number" min="0" step="0.01" [(ngModel)]="editForm.cost" class="w-24 rounded-lg border border-slate-200 px-2 py-1 text-right text-sm" />
+              </td>
+              <td class="px-4 py-3 text-right">
+                <input type="number" min="0" step="0.01" [(ngModel)]="editForm.price" class="w-24 rounded-lg border border-slate-200 px-2 py-1 text-right text-sm" />
+              </td>
+              <td class="px-4 py-3 text-right">
+                <div class="flex gap-2 justify-end">
+                  <button (click)="saveRow(sh)" [disabled]="savingRow()" class="rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-brand-600 disabled:opacity-60">
+                    {{ savingRow() ? 'Guardando…' : 'Guardar' }}
+                  </button>
+                  <button (click)="cancelEditRow()" class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50">
                     Cancelar
                   </button>
-                }
-                <button (click)="confirmRemove(sh)" class="rounded-lg border border-orange-200 px-3 py-1.5 text-xs font-medium text-orange-600 transition hover:bg-orange-50">
-                  Quitar
-                </button>
-              </div>
-            </td>
+                </div>
+              </td>
+            } @else {
+              <td class="px-4 py-3 text-right">{{ sh.cost ? ('$' + (sh.cost | number: '1.2-2')) : '—' }}</td>
+              <td class="px-4 py-3 text-right font-semibold">{{ sh.price ? ('$' + (sh.price | number: '1.2-2')) : '—' }}</td>
+              <td class="px-4 py-3 text-right">
+                <div class="flex gap-2 justify-end">
+                  <button (click)="startEditRow(sh)" class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50">
+                    Editar
+                  </button>
+                  @if (sh.status_name !== 'Cancelado') {
+                    <button (click)="confirmCancel(sh)" class="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50">
+                      Cancelar
+                    </button>
+                  }
+                  <button (click)="confirmRemove(sh)" class="rounded-lg border border-orange-200 px-3 py-1.5 text-xs font-medium text-orange-600 transition hover:bg-orange-50">
+                    Quitar
+                  </button>
+                </div>
+              </td>
+            }
           </tr>
         } @empty {
-          <tr><td colspan="7" class="px-4 py-8 text-center text-slate-400">Sin guías para este proveedor.</td></tr>
+          <tr><td colspan="8" class="px-4 py-8 text-center text-slate-400">Sin guías para este proveedor.</td></tr>
         }
       </tbody>
     </table>

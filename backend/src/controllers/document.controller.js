@@ -49,6 +49,34 @@ export const upload = async (req, res) => {
 };
 
 /**
+ * Streams an object from MinIO through the backend. Preferred over presigned
+ * URLs because those point at the internal "minio:9000" host, which the browser
+ * cannot resolve. The frontend fetches this as a blob (JWT via the auth header).
+ */
+export const download = async (req, res) => {
+  const key = req.query.key;
+
+  if (!key) {
+    return res.status(400).json({ ok: false, message: "Parámetro 'key' es obligatorio" });
+  }
+
+  try {
+    const stat = await minioClient.statObject(bucket, key);
+    res.setHeader("Content-Type", stat.metaData?.["content-type"] ?? "application/octet-stream");
+    res.setHeader("Content-Disposition", `inline; filename="${key.split("/").pop()}"`);
+
+    const stream = await minioClient.getObject(bucket, key);
+    stream.on("error", () => {
+      if (!res.headersSent) res.status(500);
+      res.end();
+    });
+    stream.pipe(res);
+  } catch {
+    return res.status(404).json({ ok: false, message: "Documento no encontrado" });
+  }
+};
+
+/**
  * Returns a short-lived presigned URL to download an object from MinIO.
  */
 export const getUrl = async (req, res) => {

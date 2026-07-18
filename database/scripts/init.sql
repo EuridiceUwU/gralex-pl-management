@@ -575,16 +575,17 @@ END;
 $$;
 
 CREATE OR REPLACE PROCEDURE sp_customer_update(
-    p_id           int,
-    p_name         varchar,
-    p_company_name varchar,
-    p_cp           varchar,
-    p_rfc          varchar,
-    p_phone        varchar,
-    p_email        varchar,
-    p_cfdi         varchar,
-    p_status       boolean,
-    p_user_id      int
+    p_id                    int,
+    p_name                  varchar,
+    p_company_name          varchar,
+    p_cp                    varchar,
+    p_rfc                   varchar,
+    p_phone                 varchar,
+    p_email                 varchar,
+    p_cfdi                  varchar,
+    p_status                boolean,
+    p_constancy_document_id int,
+    p_user_id               int
 )
 LANGUAGE plpgsql
 AS $$
@@ -599,7 +600,8 @@ BEGIN
         "phone" = COALESCE(p_phone, "phone"),
         "email" = COALESCE(p_email, "email"),
         "cfdi" = COALESCE(p_cfdi, "cfdi"),
-        "status" = COALESCE(p_status, "status")
+        "status" = COALESCE(p_status, "status"),
+        "constancy_document_id" = COALESCE(p_constancy_document_id, "constancy_document_id")
     WHERE "customer_id" = p_id;
 END;
 $$;
@@ -669,6 +671,26 @@ AS $$
 BEGIN
     PERFORM set_config('app.current_user_id', p_user_id::text, true);
     UPDATE "Shipments" SET "supplier_id" = NULL WHERE "shipment_id" = p_id;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE sp_shipment_remove_customer(p_id int, p_user_id int)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    PERFORM set_config('app.current_user_id', p_user_id::text, true);
+    UPDATE "Shipments" SET "customer_id" = NULL WHERE "shipment_id" = p_id;
+END;
+$$;
+
+-- Lightweight inline edit of just cost/price (used by the detail tables). Sets
+-- the values directly so passing NULL clears the field.
+CREATE OR REPLACE PROCEDURE sp_shipment_update_pricing(p_id int, p_cost numeric, p_price numeric, p_user_id int)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    PERFORM set_config('app.current_user_id', p_user_id::text, true);
+    UPDATE "Shipments" SET "cost" = p_cost, "price" = p_price WHERE "shipment_id" = p_id;
 END;
 $$;
 

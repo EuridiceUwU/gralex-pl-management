@@ -4,20 +4,19 @@ import { DecimalPipe, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
 import { ApiService } from '../../../core/api.service';
-import { SupplierWithBalance, Shipment } from '../../../core/models';
+import { Customer, Shipment } from '../../../core/models';
 
 @Component({
-  selector: 'app-supplier-detail',
+  selector: 'app-customer-detail',
   imports: [DecimalPipe, DatePipe, FormsModule],
-  templateUrl: './supplier-detail.component.html',
+  templateUrl: './customer-detail.component.html',
 })
-export class SupplierDetailComponent implements OnInit {
-  readonly supplier = signal<SupplierWithBalance | null>(null);
+export class CustomerDetailComponent implements OnInit {
+  readonly customer = signal<Customer | null>(null);
   readonly shipments = signal<Shipment[]>([]);
-  readonly statuses = signal<{ ss_id: number; ss_name: string }[]>([]);
   readonly loading = signal(true);
   readonly search = signal('');
-  readonly cancelTarget = signal<Shipment | null>(null);
+  readonly uploadingConstancy = signal(false);
   readonly removeTarget = signal<Shipment | null>(null);
 
   // Inline cost/price editing (one row at a time).
@@ -31,7 +30,7 @@ export class SupplierDetailComponent implements OnInit {
     return this.shipments().filter(
       (sh) =>
         sh.tracking_num.toLowerCase().includes(q) ||
-        (sh.customer_name || '').toLowerCase().includes(q) ||
+        (sh.receiver_name || '').toLowerCase().includes(q) ||
         (sh.status_name || '').toLowerCase().includes(q),
     );
   });
@@ -45,25 +44,35 @@ export class SupplierDetailComponent implements OnInit {
   ngOnInit(): void {
     const id = Number(this.route.snapshot.paramMap.get('id'));
     this.load(id);
-    this.api.shipmentStatuses().subscribe((r) => this.statuses.set(r.statuses));
   }
 
   private load(id: number): void {
     this.loading.set(true);
-    this.api.getSupplier(id).subscribe({
+    this.api.getCustomer(id).subscribe({
       next: (r) => {
-        this.supplier.set(r.supplier);
-        this.api.supplierShipments(id).subscribe((s) => {
+        this.customer.set(r.customer);
+        this.api.customerShipments(id).subscribe((s) => {
           this.shipments.set(s.shipments);
           this.loading.set(false);
         });
       },
-      error: () => this.router.navigate(['/admin/suppliers']),
+      error: () => this.router.navigate(['/admin/customers']),
     });
   }
 
-  asNumber(v: string | null | undefined): number {
-    return Number(v) || 0;
+  // Shows the paquetería label for a guide: the carrier, using carrier_other
+  // when the carrier is "Otro".
+  paqueteria(sh: Shipment): string {
+    if (sh.carrier === 'Otro') return sh.carrier_other || 'Otro';
+    return sh.carrier || '—';
+  }
+
+  viewConstancy(): void {
+    const key = this.customer()?.constancy_minio_key;
+    if (!key) return;
+    this.api.downloadDocument(key).subscribe({
+      next: (blob) => window.open(URL.createObjectURL(blob), '_blank'),
+    });
   }
 
   startEditRow(sh: Shipment): void {
@@ -87,56 +96,67 @@ export class SupplierDetailComponent implements OnInit {
         );
         this.editingRowId.set(null);
         this.savingRow.set(false);
-        // Cost feeds the supplier's consumed/available balance, so refresh it.
-        const id = this.supplier()?.supplier_id;
-        if (id) this.api.getSupplier(id).subscribe((res) => this.supplier.set(res.supplier));
       },
       error: () => this.savingRow.set(false),
     });
   }
 
-  confirmCancel(sh: Shipment): void {
-    this.cancelTarget.set(sh);
+  onConstancyFile(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = ''; // allow re-selecting the same file
+    const id = this.customer()?.customer_id;
+    if (!file || !id) return;
+
+    this.uploadingConstancy.set(true);
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('documentType', 'Constancia SAT');
+    this.api.uploadDocument(fd).subscribe({
+      next: (r) => {
+        this.api.updateCustomer(id, { constancyDocumentId: r.document.minio_id }).subscribe({
+          next: () => {
+            this.uploadingConstancy.set(false);
+            this.reloadCustomer();
+          },
+          error: () => this.uploadingConstancy.set(false),
+        });
+      },
+      error: () => this.uploadingConstancy.set(false),
+    });
+  }
+
+  private reloadCustomer(): void {
+    const id = this.customer()?.customer_id;
+    if (!id) return;
+    this.api.getCustomer(id).subscribe((r) => this.customer.set(r.customer));
   }
 
   confirmRemove(sh: Shipment): void {
     this.removeTarget.set(sh);
   }
 
-  dismissModals(): void {
-    this.cancelTarget.set(null);
+  dismissModal(): void {
     this.removeTarget.set(null);
-  }
-
-  executeCancel(): void {
-    const sh = this.cancelTarget();
-    if (!sh) return;
-    const cancelStatus = this.statuses().find((s) => s.ss_name === 'Cancelado');
-    if (!cancelStatus) return;
-    this.cancelTarget.set(null);
-    this.api.updateShipmentStatus(sh.shipment_id, cancelStatus.ss_id).subscribe({
-      next: () => this.reloadAll(),
-    });
   }
 
   executeRemove(): void {
     const sh = this.removeTarget();
     if (!sh) return;
     this.removeTarget.set(null);
-    this.api.removeShipmentSupplier(sh.shipment_id).subscribe({
-      next: () => this.reloadAll(),
-      error: () => this.reloadAll(),
+    this.api.removeShipmentCustomer(sh.shipment_id).subscribe({
+      next: () => this.reloadShipments(),
+      error: () => this.reloadShipments(),
     });
   }
 
-  private reloadAll(): void {
-    const id = this.supplier()?.supplier_id;
+  private reloadShipments(): void {
+    const id = this.customer()?.customer_id;
     if (!id) return;
-    this.api.getSupplier(id).subscribe((r) => this.supplier.set(r.supplier));
-    this.api.supplierShipments(id).subscribe((s) => this.shipments.set(s.shipments));
+    this.api.customerShipments(id).subscribe((s) => this.shipments.set(s.shipments));
   }
 
   goBack(): void {
-    this.router.navigate(['/admin/suppliers']);
+    this.router.navigate(['/admin/customers']);
   }
 }

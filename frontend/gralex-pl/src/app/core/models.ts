@@ -71,7 +71,12 @@ export interface Customer {
   email: string | null;
   phone: string | null;
   rfc: string | null;
+  cp: string | null;
+  cfdi: string | null;
   status: boolean;
+  constancy_document_id: number | null;
+  // Only present on the single-customer detail response (joined from Minio_documents).
+  constancy_minio_key?: string | null;
 }
 
 export interface Supplier {

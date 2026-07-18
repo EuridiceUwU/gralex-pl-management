@@ -49,6 +49,13 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'customers/:id',
+        loadComponent: () =>
+          import('./features/admin/customers/customer-detail.component').then(
+            (m) => m.CustomerDetailComponent,
+          ),
+      },
+      {
         path: 'suppliers',
         loadComponent: () =>
           import('./features/admin/suppliers/suppliers.component').then(

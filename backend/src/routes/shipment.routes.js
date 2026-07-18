@@ -126,5 +126,7 @@ router.get("/:id", ShipmentController.get);
 router.put("/:id", ShipmentController.update);
 router.patch("/:id/status", ShipmentController.updateStatus);
 router.patch("/:id/remove-supplier", ShipmentController.removeSupplier);
+router.patch("/:id/remove-customer", ShipmentController.removeCustomer);
+router.patch("/:id/pricing", ShipmentController.updatePricing);
 
 export default router;
