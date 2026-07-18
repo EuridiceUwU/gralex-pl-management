@@ -21,3 +21,14 @@ export const requireAuth = (req, res, next) => {
     return res.status(401).json({ ok: false, message: "Token inválido o expirado" });
   }
 };
+
+/**
+ * Restringe el acceso a administradores. Debe usarse después de `requireAuth`,
+ * que es quien deja el payload decodificado en `req.user`.
+ */
+export const requireAdmin = (req, res, next) => {
+  if (req.user?.role !== "Administrador") {
+    return res.status(403).json({ ok: false, message: "Acceso restringido a administradores" });
+  }
+  return next();
+};

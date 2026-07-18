@@ -3,7 +3,7 @@
     <h2 class="text-2xl font-bold">Empleados</h2>
     <p class="text-sm text-slate-500">Equipo y accesos al panel.</p>
   </div>
-  <button (click)="showForm.set(!showForm())" class="rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-600">
+  <button (click)="showForm() ? cancelForm() : showForm.set(true)" class="rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-600">
     {{ showForm() ? 'Cerrar' : '+ Nuevo empleado' }}
   </button>
 </div>
@@ -27,37 +27,125 @@
     <label class="text-sm"><span class="font-medium text-slate-700">Teléfono</span>
       <input name="phone" phoneMask #phoneRef="ngModel" [(ngModel)]="form.phone" required pattern="\d{10}" placeholder="271-230-4713" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
       <app-field-error [field]="phoneRef" patternMessage="Deben ser 10 dígitos." /></label>
-    <label class="text-sm"><span class="font-medium text-slate-700">Contraseña (acceso opcional)</span>
-      <input name="password" type="password" #passwordRef="ngModel" [(ngModel)]="form.password" minlength="6" maxlength="72" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
-      <app-field-error [field]="passwordRef" /></label>
-    <div class="md:col-span-3">
+    @if (!editingId()) {
+      <label class="text-sm"><span class="font-medium text-slate-700">Contraseña (acceso opcional)</span>
+        <div class="relative mt-1">
+          <input name="password" [type]="showPassword() ? 'text' : 'password'" #passwordRef="ngModel" [(ngModel)]="form.password" minlength="6" maxlength="72" class="w-full rounded-lg border border-slate-200 px-3 py-2 pr-11" />
+          <button
+            type="button"
+            (click)="showPassword.set(!showPassword())"
+            [attr.aria-label]="showPassword() ? 'Ocultar contraseña' : 'Mostrar contraseña'"
+            [attr.aria-pressed]="showPassword()"
+            class="absolute inset-y-0 right-0 grid w-11 place-items-center text-slate-400 transition hover:text-brand-600"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5">
+              @if (showPassword()) {
+                <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 10 8 10 8a18.5 18.5 0 0 1-2.16 3.19" />
+                <path d="M6.61 6.61A18.5 18.5 0 0 0 2 12s3 8 10 8a9.12 9.12 0 0 0 5.39-1.61" />
+                <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+                <line x1="2" y1="2" x2="22" y2="22" />
+              } @else {
+                <path d="M2 12s3-8 10-8 10 8 10 8-3 8-10 8-10-8-10-8Z" />
+                <circle cx="12" cy="12" r="3" />
+              }
+            </svg>
+          </button>
+        </div>
+        <app-field-error [field]="passwordRef" /></label>
+    }
+    <div class="md:col-span-3 flex gap-3">
       <button type="submit" [disabled]="saving() || f.invalid" class="rounded-xl bg-brand-500 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:opacity-60">
-        {{ saving() ? 'Guardando…' : 'Guardar' }}
+        {{ saving() ? 'Guardando…' : (editingId() ? 'Actualizar' : 'Guardar') }}
+      </button>
+      <button type="button" (click)="cancelForm()" class="rounded-xl border border-slate-200 px-6 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
+        Cancelar
       </button>
     </div>
   </form>
 }
 
-<div class="mt-6 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
+<div class="mt-4 flex items-center gap-3">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5 text-slate-400">
+    <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+  </svg>
+  <input
+    type="text"
+    placeholder="Buscar por nombre, rol, email o teléfono…"
+    [ngModel]="search()"
+    (ngModelChange)="search.set($event)"
+    class="w-full max-w-md rounded-lg border border-slate-200 px-3 py-2 text-sm placeholder-slate-400 focus:border-brand-400 focus:outline-none"
+  />
+</div>
+
+<div class="mt-4 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
   @if (loading()) {
     <p class="p-6 text-slate-500">Cargando…</p>
   } @else {
     <table class="w-full text-left text-sm">
       <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-        <tr><th class="px-4 py-3">Nombre</th><th class="px-4 py-3">Rol</th><th class="px-4 py-3">Email</th><th class="px-4 py-3">Teléfono</th></tr>
+        <tr>
+          <th class="px-4 py-3">Nombre</th>
+          <th class="px-4 py-3">Rol</th>
+          <th class="px-4 py-3">Email</th>
+          <th class="px-4 py-3">Teléfono</th>
+          <th class="px-4 py-3">Estado</th>
+          <th class="px-4 py-3"></th>
+        </tr>
       </thead>
       <tbody class="divide-y divide-slate-100">
-        @for (e of items(); track e.employee_id) {
+        @for (e of filtered(); track e.employee_id) {
           <tr class="transition hover:bg-slate-50">
             <td class="px-4 py-3 font-medium text-slate-800">{{ e.name }}</td>
             <td class="px-4 py-3"><span class="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700">{{ e.role_name }}</span></td>
             <td class="px-4 py-3">{{ e.email || '—' }}</td>
             <td class="px-4 py-3">{{ e.phone || '—' }}</td>
+            <td class="px-4 py-3">
+              @if (e.status) {
+                <span class="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">Activo</span>
+              } @else {
+                <span class="rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700">Inactivo</span>
+              }
+            </td>
+            <td class="px-4 py-3 text-right">
+              <div class="flex gap-2 justify-end">
+                <button (click)="startEdit(e)" class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50">
+                  Editar
+                </button>
+                @if (e.status) {
+                  <button (click)="confirmDeactivate(e)" [disabled]="isSelf(e)" [title]="isSelf(e) ? 'No puedes desactivar tu propia cuenta' : ''" class="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent">
+                    Desactivar
+                  </button>
+                } @else {
+                  <button (click)="activate(e)" class="rounded-lg border border-emerald-200 px-3 py-1.5 text-xs font-medium text-emerald-600 transition hover:bg-emerald-50">
+                    Activar
+                  </button>
+                }
+              </div>
+            </td>
           </tr>
         } @empty {
-          <tr><td colspan="4" class="px-4 py-8 text-center text-slate-400">Sin empleados.</td></tr>
+          <tr><td colspan="6" class="px-4 py-8 text-center text-slate-400">Sin empleados.</td></tr>
         }
       </tbody>
     </table>
   }
 </div>
+
+@if (confirmTarget(); as e) {
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+    <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+      <h3 class="text-lg font-bold text-slate-800">Desactivar empleado</h3>
+      <p class="mt-2 text-sm text-slate-600">
+        ¿Estás seguro de desactivar a <strong>{{ e.name }}</strong>?
+      </p>
+      <div class="mt-6 flex justify-end gap-3">
+        <button (click)="cancelConfirm()" class="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
+          Cancelar
+        </button>
+        <button (click)="deactivate()" class="rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700">
+          Desactivar
+        </button>
+      </div>
+    </div>
+  </div>
+}

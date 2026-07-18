@@ -66,6 +66,11 @@ export const newEmployee = async (req, res) => {
 export const updateEmployee = async (req, res) => {
   const { roleId, name, restDays, phone, email, status } = req.body;
 
+  // Un admin no puede desactivar su propia cuenta (sí puede editar sus datos).
+  if (status === false && Number(req.params.id) === req.user?.employeeId) {
+    return res.status(400).json({ ok: false, message: "No puedes desactivar tu propia cuenta" });
+  }
+
   const employee = await EmployeeModel.updateEmployee(
     Number(req.params.id),
     { roleId, name, restDays, phone, email, status },
@@ -80,6 +85,11 @@ export const updateEmployee = async (req, res) => {
 };
 
 export const deleteEmployee = async (req, res) => {
+  // DELETE siempre da de baja (status = false); impedir la auto-desactivación.
+  if (Number(req.params.id) === req.user?.employeeId) {
+    return res.status(400).json({ ok: false, message: "No puedes desactivar tu propia cuenta" });
+  }
+
   const employee = await EmployeeModel.deleteEmployee(Number(req.params.id), req.user?.sub ?? null);
 
   if (!employee) {

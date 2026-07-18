@@ -131,8 +131,20 @@ export class ApiService {
     );
   }
 
+  getEmployee(id: number): Observable<{ employee: Employee }> {
+    return this.http.get<{ employee: Employee }>(`${API_BASE}/employees/${id}`);
+  }
+
   createEmployee(payload: unknown): Observable<unknown> {
     return this.http.post(`${API_BASE}/employees`, payload);
+  }
+
+  updateEmployee(id: number, payload: unknown): Observable<unknown> {
+    return this.http.put(`${API_BASE}/employees/${id}`, payload);
+  }
+
+  deleteEmployee(id: number): Observable<unknown> {
+    return this.http.delete(`${API_BASE}/employees/${id}`);
   }
 
   // Documents / OCR

@@ -303,7 +303,8 @@ SELECT u."user_id",
        u."created_at",
        e."name",
        r."role_id",
-       r."role_name"
+       r."role_name",
+       e."status" AS "employee_status"
 FROM "Users" u
 JOIN "Employees" e ON e."employee_id" = u."employee_id"
 JOIN "Roles" r     ON r."role_id" = e."role_id";
@@ -792,6 +793,11 @@ WHERE NOT EXISTS (SELECT 1 FROM "Shipments_status" s WHERE s."ss_name" = t.v);
 
 -- Rename legacy "Pendiente" status for existing databases
 UPDATE "Shipments_status" SET "ss_name" = 'Etiqueta creada' WHERE "ss_name" = 'Pendiente';
+
+-- Rol base para empleados sin acceso administrativo (idempotente)
+INSERT INTO "Roles" ("role_name", "salary", "description")
+SELECT 'Empleado general', 0, 'Empleado sin acceso al panel administrativo'
+WHERE NOT EXISTS (SELECT 1 FROM "Roles" WHERE "role_name" = 'Empleado general');
 
 -- Bootstrap administrator: Role -> Employee -> User.
 -- The login user is admin@gralex.com / admin123 (bcrypt hash via pgcrypto).
