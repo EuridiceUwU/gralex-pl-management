@@ -58,6 +58,19 @@ export const removeSupplier = async (id, userId) => {
   return getShipment(id);
 };
 
+// sp_shipment_remove_customer is a void procedure.
+export const removeCustomer = async (id, userId) => {
+  await pool.query("CALL sp_shipment_remove_customer($1, $2)", [id, userId]);
+  return getShipment(id);
+};
+
+// sp_shipment_update_pricing is a void procedure; it sets cost/price directly
+// (NULL clears the field) for lightweight inline edits from the detail tables.
+export const updatePricing = async (id, { cost, price }, userId) => {
+  await pool.query("CALL sp_shipment_update_pricing($1, $2, $3, $4)", [id, cost, price, userId]);
+  return getShipment(id);
+};
+
 // sp_shipment_update is a void procedure; it sets every column directly
 // (full-form edit), so callers must send the complete shipment shape.
 export const updateShipment = async (id, s, userId) => {

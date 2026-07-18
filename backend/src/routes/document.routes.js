@@ -137,4 +137,22 @@ router.post("/confirm-shipment", upload.single("file"), DocumentController.confi
  */
 router.get("/url", DocumentController.getUrl);
 
+/**
+ * @swagger
+ * /documents/download:
+ *   get:
+ *     summary: Descarga/visualiza un documento haciendo stream desde MinIO por el backend
+ *     tags: [Documents]
+ *     parameters:
+ *       - in: query
+ *         name: key
+ *         required: true
+ *         schema: { type: string }
+ *         description: minio_key del documento (ej. constancia-sat/uuid.pdf)
+ *     responses:
+ *       200: { description: Contenido binario del documento }
+ *       404: { description: No encontrado }
+ */
+router.get("/download", DocumentController.download);
+
 export default router;

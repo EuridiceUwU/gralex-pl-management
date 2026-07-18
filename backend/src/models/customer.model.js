@@ -5,9 +5,25 @@ export const listCustomers = async () => {
   return rows;
 };
 
+// Joins Minio_documents so the response exposes the constancy's minio_key,
+// which the frontend uses to request a presigned download URL.
 export const getCustomer = async (id) => {
-  const { rows } = await pool.query('SELECT * FROM "Customers" WHERE "customer_id" = $1', [id]);
+  const { rows } = await pool.query(
+    `SELECT c.*, m."minio_key" AS "constancy_minio_key"
+       FROM "Customers" c
+       LEFT JOIN "Minio_documents" m ON m."minio_id" = c."constancy_document_id"
+      WHERE c."customer_id" = $1`,
+    [id],
+  );
   return rows[0] ?? null;
+};
+
+export const listShipmentsByCustomer = async (customerId) => {
+  const { rows } = await pool.query(
+    'SELECT * FROM "vw_shipments_detail" WHERE "customer_id" = $1 ORDER BY "shipment_id" DESC',
+    [customerId],
+  );
+  return rows;
 };
 
 // sp_customer_create returns only the new row's id; the row itself is
@@ -33,7 +49,7 @@ export const createCustomer = async (c) => {
 // sp_customer_update/sp_customer_delete are void procedures; passing NULL
 // for a field leaves it unchanged (COALESCE inside the procedure).
 export const updateCustomer = async (id, c, userId) => {
-  await pool.query("CALL sp_customer_update($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)", [
+  await pool.query("CALL sp_customer_update($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)", [
     id,
     c.name,
     c.companyName,
@@ -43,6 +59,7 @@ export const updateCustomer = async (id, c, userId) => {
     c.email,
     c.cfdi,
     c.status,
+    c.constancyDocumentId,
     userId,
   ]);
   return getCustomer(id);

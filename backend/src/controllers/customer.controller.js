@@ -38,11 +38,11 @@ export const create = async (req, res) => {
 };
 
 export const update = async (req, res) => {
-  const { name, companyName, cp, rfc, phone, email, cfdi, status } = req.body;
+  const { name, companyName, cp, rfc, phone, email, cfdi, status, constancyDocumentId } = req.body;
 
   const customer = await CustomerModel.updateCustomer(
     Number(req.params.id),
-    { name, companyName, cp, rfc, phone, email, cfdi, status },
+    { name, companyName, cp, rfc, phone, email, cfdi, status, constancyDocumentId },
     req.user?.sub ?? null,
   );
 
@@ -61,4 +61,9 @@ export const remove = async (req, res) => {
   }
 
   return res.json({ ok: true, message: "Cliente dado de baja", customer });
+};
+
+export const listShipments = async (req, res) => {
+  const shipments = await CustomerModel.listShipmentsByCustomer(Number(req.params.id));
+  return res.json({ ok: true, shipments });
 };
