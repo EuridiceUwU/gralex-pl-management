@@ -45,8 +45,25 @@ export const login = async (req, res) => {
       email: user.email,
       name: user.name,
       role: user.role_name,
+      must_change_password: user.must_change_password,
     },
   });
+};
+
+export const changePassword = async (req, res) => {
+  const { newPassword } = req.body;
+
+  if (!newPassword || newPassword.length < 6 || newPassword.length > 72) {
+    return res
+      .status(400)
+      .json({ ok: false, message: "La nueva contraseña debe tener entre 6 y 72 caracteres" });
+  }
+
+  const userId = req.user.sub;
+  const hash = await bcrypt.hash(newPassword, 10);
+  await AuthModel.updatePassword(userId, hash, userId);
+
+  return res.json({ ok: true, message: "Contraseña actualizada" });
 };
 
 export const me = async (req, res) => {

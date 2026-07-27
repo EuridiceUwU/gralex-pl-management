@@ -15,6 +15,9 @@ export class AuthService {
   readonly user = this._user.asReadonly();
   readonly isAuthenticated = computed(() => this._user() !== null);
   readonly isAdmin = computed(() => this._user()?.role === 'Administrador');
+  // True while the account still holds its temporary password and must change
+  // it before using the rest of the app.
+  readonly mustChangePassword = computed(() => this._user()?.must_change_password === true);
 
   constructor(private readonly http: HttpClient) {}
 
@@ -30,6 +33,23 @@ export class AuthService {
           localStorage.setItem(TOKEN_KEY, res.token);
           localStorage.setItem(USER_KEY, JSON.stringify(res.user));
           this._user.set(res.user);
+        }),
+      );
+  }
+
+  changePassword(newPassword: string): Observable<{ ok: boolean; message: string }> {
+    return this.http
+      .post<{ ok: boolean; message: string }>(`${API_BASE}/auth/change-password`, { newPassword })
+      .pipe(
+        tap(() => {
+          // Clear the temporary-password flag locally so guards let the user
+          // into the rest of the app without needing a fresh login.
+          const current = this._user();
+          if (current) {
+            const updated = { ...current, must_change_password: false };
+            localStorage.setItem(USER_KEY, JSON.stringify(updated));
+            this._user.set(updated);
+          }
         }),
       );
   }
