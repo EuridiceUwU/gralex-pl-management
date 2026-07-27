@@ -52,9 +52,16 @@ CREATE TABLE "Users" (
     "employee_id" int UNIQUE NOT NULL,
     "email" varchar(254) UNIQUE NOT NULL,
     "password" text NOT NULL,
+    "must_change_password" boolean NOT NULL DEFAULT false,
     "status" boolean DEFAULT true,
     "created_at" timestamp DEFAULT now()
 );
+
+-- Idempotent: allows re-running this script over an already-initialised DB to
+-- add the flag without recreating the table. New accounts are forced to change
+-- their temporary password on first login (sp_user_create sets it to true);
+-- pre-existing users keep the false default so they are not forced.
+ALTER TABLE "Users" ADD COLUMN IF NOT EXISTS "must_change_password" boolean NOT NULL DEFAULT false;
 
 CREATE TABLE "Minio_documents" (
     "minio_id" serial PRIMARY KEY,
@@ -303,7 +310,12 @@ SELECT u."user_id",
        u."created_at",
        e."name",
        r."role_id",
-       r."role_name"
+       r."role_name",
+       e."status" AS "employee_status",
+       -- Appended at the end so CREATE OR REPLACE VIEW stays idempotent when the
+       -- script is re-run over an already-existing view (it can only add columns
+       -- at the tail, never reorder existing ones).
+       u."must_change_password"
 FROM "Users" u
 JOIN "Employees" e ON e."employee_id" = u."employee_id"
 JOIN "Roles" r     ON r."role_id" = e."role_id";
@@ -383,8 +395,28 @@ AS $$
 BEGIN
     PERFORM set_config('app.current_user_id', p_created_by::text, true);
 
-    INSERT INTO "Users" ("employee_id", "email", "password")
-    VALUES (p_employee_id, p_email, p_password);
+    -- New accounts always start with a temporary password the admin hands over;
+    -- must_change_password = true forces the change on first login.
+    INSERT INTO "Users" ("employee_id", "email", "password", "must_change_password")
+    VALUES (p_employee_id, p_email, p_password, true);
+END;
+$$;
+
+-- Sets a new password (already hashed by the app) and clears the temporary flag.
+CREATE OR REPLACE PROCEDURE sp_user_update_password(
+    p_user_id     int,
+    p_password    text,
+    p_acting_user int
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    PERFORM set_config('app.current_user_id', p_acting_user::text, true);
+
+    UPDATE "Users"
+    SET "password" = p_password,
+        "must_change_password" = false
+    WHERE "user_id" = p_user_id;
 END;
 $$;
 
@@ -792,6 +824,11 @@ WHERE NOT EXISTS (SELECT 1 FROM "Shipments_status" s WHERE s."ss_name" = t.v);
 
 -- Rename legacy "Pendiente" status for existing databases
 UPDATE "Shipments_status" SET "ss_name" = 'Etiqueta creada' WHERE "ss_name" = 'Pendiente';
+
+-- Rol base para empleados sin acceso administrativo (idempotente)
+INSERT INTO "Roles" ("role_name", "salary", "description")
+SELECT 'Empleado general', 0, 'Empleado sin acceso al panel administrativo'
+WHERE NOT EXISTS (SELECT 1 FROM "Roles" WHERE "role_name" = 'Empleado general');
 
 -- Bootstrap administrator: Role -> Employee -> User.
 -- The login user is admin@gralex.com / admin123 (bcrypt hash via pgcrypto).

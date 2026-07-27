@@ -55,4 +55,31 @@ router.post("/login", AuthController.login);
  */
 router.get("/me", requireAuth, AuthController.me);
 
+/**
+ * @swagger
+ * /auth/change-password:
+ *   post:
+ *     summary: Cambiar la contraseña del usuario autenticado
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [newPassword]
+ *             properties:
+ *               newPassword:
+ *                 type: string
+ *                 example: NuevaClave123
+ *     responses:
+ *       200:
+ *         description: Contraseña actualizada
+ *       400:
+ *         description: Contraseña inválida
+ *       401:
+ *         description: No autenticado
+ */
+router.post("/change-password", requireAuth, AuthController.changePassword);
+
 export default router;

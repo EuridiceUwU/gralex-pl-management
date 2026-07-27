@@ -1,8 +1,10 @@
 export interface AuthUser {
   user_id: number;
+  employee_id: number;
   email: string;
   name: string;
   role: string;
+  must_change_password: boolean;
 }
 
 export interface LoginResponse {

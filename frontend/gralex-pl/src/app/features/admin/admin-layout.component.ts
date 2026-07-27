@@ -7,6 +7,7 @@ interface NavItem {
   path: string;
   label: string;
   icon: string;
+  adminOnly?: boolean;
 }
 
 // Icon keys map to minimalist line SVGs rendered in the template.
@@ -23,7 +24,7 @@ export class AdminLayoutComponent {
     { path: 'upload', label: 'Subir guía', icon: 'upload' },
     { path: 'customers', label: 'Clientes', icon: 'users' },
     { path: 'suppliers', label: 'Proveedores', icon: 'truck' },
-    { path: 'employees', label: 'Empleados', icon: 'badge' },
+    { path: 'employees', label: 'Empleados', icon: 'badge', adminOnly: true },
   ];
 
   constructor(

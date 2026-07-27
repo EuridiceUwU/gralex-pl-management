@@ -7,6 +7,7 @@
     </div>
     <nav class="flex-1 space-y-1 px-3 py-4">
       @for (item of nav; track item.path) {
+        @if (!item.adminOnly || auth.isAdmin()) {
         <a
           [routerLink]="item.path"
           routerLinkActive="bg-brand-50 text-brand-700 font-semibold"
@@ -60,6 +61,7 @@
           </svg>
           {{ item.label }}
         </a>
+        }
       }
     </nav>
     <button

@@ -13,7 +13,9 @@ export const login = async (req, res) => {
 
   const user = await AuthModel.findUserByEmail(email);
 
-  if (!user || !user.status) {
+  // Se rechaza si el usuario está deshabilitado (user.status) o si el empleado
+  // asociado fue desactivado (employee_status); ambos bloquean el acceso.
+  if (!user || !user.status || !user.employee_status) {
     return res.status(401).json({ ok: false, message: "Credenciales inválidas" });
   }
 
@@ -24,7 +26,12 @@ export const login = async (req, res) => {
   }
 
   const token = jwt.sign(
-    { sub: user.user_id, email: user.email, role: user.role_name },
+    {
+      sub: user.user_id,
+      employeeId: user.employee_id,
+      email: user.email,
+      role: user.role_name,
+    },
     jwtConfig.secret,
     { expiresIn: jwtConfig.expiresIn },
   );
@@ -33,9 +40,30 @@ export const login = async (req, res) => {
     ok: true,
     token,
     user: {
-      name: user.name
+      user_id: user.user_id,
+      employee_id: user.employee_id,
+      email: user.email,
+      name: user.name,
+      role: user.role_name,
+      must_change_password: user.must_change_password,
     },
   });
+};
+
+export const changePassword = async (req, res) => {
+  const { newPassword } = req.body;
+
+  if (!newPassword || newPassword.length < 6 || newPassword.length > 72) {
+    return res
+      .status(400)
+      .json({ ok: false, message: "La nueva contraseña debe tener entre 6 y 72 caracteres" });
+  }
+
+  const userId = req.user.sub;
+  const hash = await bcrypt.hash(newPassword, 10);
+  await AuthModel.updatePassword(userId, hash, userId);
+
+  return res.json({ ok: true, message: "Contraseña actualizada" });
 };
 
 export const me = async (req, res) => {

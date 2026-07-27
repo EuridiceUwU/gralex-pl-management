@@ -1,18 +1,18 @@
 import { Component, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
 
 import { AuthService } from '../../../core/auth.service';
 import { FieldErrorComponent } from '../../../shared/field-error.component';
 
 @Component({
-  selector: 'app-login',
-  imports: [FormsModule, RouterLink, FieldErrorComponent],
-  templateUrl: './login.component.html',
+  selector: 'app-change-password',
+  imports: [FormsModule, FieldErrorComponent],
+  templateUrl: './change-password.component.html',
 })
-export class LoginComponent {
-  email = '';
-  password = '';
+export class ChangePasswordComponent {
+  newPassword = '';
+  confirmPassword = '';
 
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
@@ -24,21 +24,22 @@ export class LoginComponent {
   ) {}
 
   submit(): void {
+    if (this.newPassword !== this.confirmPassword) {
+      this.error.set('Las contraseñas no coinciden.');
+      return;
+    }
+
     this.loading.set(true);
     this.error.set(null);
 
-    this.auth.login(this.email, this.password).subscribe({
+    this.auth.changePassword(this.newPassword).subscribe({
       next: () => {
         this.loading.set(false);
-        // First login with a temporary password: force the change screen.
-        const target = this.auth.mustChangePassword()
-          ? '/admin/change-password'
-          : '/admin/dashboard';
-        this.router.navigate([target]);
+        this.router.navigate(['/admin/dashboard']);
       },
       error: (err) => {
         this.loading.set(false);
-        this.error.set(err?.error?.message ?? 'No se pudo iniciar sesión');
+        this.error.set(err?.error?.message ?? 'No se pudo actualizar la contraseña');
       },
     });
   }

@@ -13,3 +13,7 @@ export const findUserById = async (userId) => {
   ]);
   return rows[0] ?? null;
 };
+
+export const updatePassword = async (userId, hash, actingUser) => {
+  await pool.query("CALL sp_user_update_password($1, $2, $3)", [userId, hash, actingUser]);
+};
