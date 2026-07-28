@@ -96,6 +96,15 @@ export interface SupplierWithBalance extends Supplier {
   available_balance: string | null;
 }
 
+export interface Account {
+  account_id: number;
+  start_period: string;
+  end_period: string;
+  total_amount: string | null;
+  created_at: string;
+  minio_key: string;
+}
+
 export interface Employee {
   employee_id: number;
   name: string;

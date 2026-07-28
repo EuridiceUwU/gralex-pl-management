@@ -813,6 +813,29 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE PROCEDURE sp_account_create(
+    p_created_by   int,
+    p_minio_id     int,
+    p_start_period date,
+    p_end_period   date,
+    p_owner_id     int,
+    p_owner_type   varchar,
+    p_total_amount numeric,
+    OUT new_id     int
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    PERFORM set_config('app.current_user_id', p_created_by::text, true);
+
+    INSERT INTO "Accounts" ("created_by", "minio_id", "start_period", "end_period", "owner_id", "owner_type", "total_amount")
+    VALUES (p_created_by, p_minio_id, p_start_period, p_end_period, p_owner_id, p_owner_type, p_total_amount)
+    RETURNING "account_id" INTO new_id;
+END;
+$$;
+
+CREATE TRIGGER trg_accounts_audit AFTER INSERT ON "Accounts" FOR EACH ROW EXECUTE FUNCTION fn_audit_log('account_id');
+
 -- ============================================================================
 --  Seed data
 -- ============================================================================

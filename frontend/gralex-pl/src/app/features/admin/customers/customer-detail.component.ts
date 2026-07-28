@@ -4,7 +4,7 @@ import { DecimalPipe, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
 import { ApiService } from '../../../core/api.service';
-import { Customer, Shipment } from '../../../core/models';
+import { Account, Customer, Shipment } from '../../../core/models';
 
 @Component({
   selector: 'app-customer-detail',
@@ -23,6 +23,14 @@ export class CustomerDetailComponent implements OnInit {
   readonly editingRowId = signal<number | null>(null);
   readonly savingRow = signal(false);
   editForm: { cost: number | null; price: number | null } = { cost: null, price: null };
+
+  // Estado de cuenta (statement) filters, preview summary, and history.
+  readonly statementFrom = signal('');
+  readonly statementTo = signal('');
+  readonly statementSummary = signal<{ count: number; total: number } | null>(null);
+  readonly statementLoading = signal(false);
+  readonly downloadingFormat = signal<'pdf' | 'excel' | null>(null);
+  readonly statements = signal<Account[]>([]);
 
   filteredShipments = computed(() => {
     const q = this.search().toLowerCase();
@@ -55,9 +63,74 @@ export class CustomerDetailComponent implements OnInit {
           this.shipments.set(s.shipments);
           this.loading.set(false);
         });
+        this.loadStatements();
       },
       error: () => this.router.navigate(['/admin/customers']),
     });
+  }
+
+  private loadStatements(): void {
+    const id = this.customer()?.customer_id;
+    if (!id) return;
+    this.api.customerStatements(id).subscribe((r) => this.statements.set(r.accounts));
+  }
+
+  consultStatement(): void {
+    const id = this.customer()?.customer_id;
+    const from = this.statementFrom();
+    const to = this.statementTo();
+    if (!id || !from || !to) return;
+
+    this.statementLoading.set(true);
+    this.api.customerShipmentsInRange(id, from, to).subscribe({
+      next: (r) => {
+        const total = r.shipments.reduce((sum, sh) => sum + Number(sh.price ?? 0), 0);
+        this.statementSummary.set({ count: r.shipments.length, total });
+        this.statementLoading.set(false);
+      },
+      error: () => this.statementLoading.set(false),
+    });
+  }
+
+  downloadStatement(format: 'pdf' | 'excel'): void {
+    const id = this.customer()?.customer_id;
+    const from = this.statementFrom();
+    const to = this.statementTo();
+    if (!id || !from || !to) return;
+
+    this.downloadingFormat.set(format);
+    this.api.downloadCustomerStatement(id, from, to, format).subscribe({
+      next: (blob) => {
+        const ext = format === 'pdf' ? 'pdf' : 'xlsx';
+        this.triggerDownload(blob, `estado-cuenta-${from}-${to}.${ext}`);
+        this.downloadingFormat.set(null);
+        this.loadStatements();
+      },
+      error: () => this.downloadingFormat.set(null),
+    });
+  }
+
+  downloadHistoryStatement(account: Account): void {
+    this.api.downloadDocument(account.minio_key).subscribe({
+      next: (blob) => {
+        const ext = account.minio_key.slice(account.minio_key.lastIndexOf('.') + 1) || 'pdf';
+        this.triggerDownload(
+          blob,
+          `estado-cuenta-${account.start_period}-${account.end_period}.${ext}`,
+        );
+      },
+    });
+  }
+
+  // Forces a "Save As" download rather than opening the file in a new tab
+  // (used for statement exports; viewConstancy() above still opens inline).
+  private triggerDownload(blob: Blob, filename: string): void {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   // Shows the paquetería label for a guide: the carrier, using carrier_other
