@@ -192,6 +192,7 @@ CREATE INDEX "idx_shipments_supplier" ON "Shipments" ("supplier_id");
 CREATE INDEX "idx_shipments_customer" ON "Shipments" ("customer_id");
 CREATE INDEX "idx_shipments_minio" ON "Shipments" ("minio_id");
 CREATE INDEX "idx_shipments_date_range" ON "Shipments" ("customer_id", "creation_date");
+CREATE INDEX "idx_shipments_supplier_date_range" ON "Shipments" ("supplier_id", "creation_date");
 CREATE INDEX "idx_accounts_created_by" ON "Accounts" ("created_by");
 CREATE INDEX "idx_accounts_minio" ON "Accounts" ("minio_id");
 CREATE INDEX "idx_records_user_id" ON "Records" ("user_id");
