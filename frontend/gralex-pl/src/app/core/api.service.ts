@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 
 import { API_BASE } from './api.config';
 import {
+  Account,
   Customer,
   DashboardResponse,
   Employee,
@@ -74,6 +75,34 @@ export class ApiService {
 
   customerShipments(id: number): Observable<{ shipments: Shipment[] }> {
     return this.http.get<{ shipments: Shipment[] }>(`${API_BASE}/customers/${id}/shipments`);
+  }
+
+  customerShipmentsInRange(
+    id: number,
+    from: string,
+    to: string,
+  ): Observable<{ shipments: Shipment[] }> {
+    return this.http.get<{ shipments: Shipment[] }>(`${API_BASE}/customers/${id}/shipments`, {
+      params: { from, to },
+    });
+  }
+
+  customerStatements(id: number): Observable<{ accounts: Account[] }> {
+    return this.http.get<{ accounts: Account[] }>(`${API_BASE}/customers/${id}/statements`);
+  }
+
+  // Generates and streams the statement file as a blob so it can be forced into
+  // a download (unlike downloadDocument, which is used to view files inline).
+  downloadCustomerStatement(
+    id: number,
+    from: string,
+    to: string,
+    format: 'pdf' | 'excel',
+  ): Observable<Blob> {
+    return this.http.get(`${API_BASE}/customers/${id}/statement`, {
+      params: { from, to, format },
+      responseType: 'blob',
+    });
   }
 
   removeShipmentCustomer(id: number): Observable<unknown> {
