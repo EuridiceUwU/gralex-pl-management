@@ -141,6 +141,34 @@ export class ApiService {
     return this.http.get<{ shipments: Shipment[] }>(`${API_BASE}/suppliers/${id}/shipments`);
   }
 
+  supplierShipmentsInRange(
+    id: number,
+    from: string,
+    to: string,
+  ): Observable<{ shipments: Shipment[] }> {
+    return this.http.get<{ shipments: Shipment[] }>(`${API_BASE}/suppliers/${id}/shipments`, {
+      params: { from, to },
+    });
+  }
+
+  supplierStatements(id: number): Observable<{ accounts: Account[] }> {
+    return this.http.get<{ accounts: Account[] }>(`${API_BASE}/suppliers/${id}/statements`);
+  }
+
+  // Generates and streams the statement file as a blob so it can be forced into
+  // a download (unlike downloadDocument, which is used to view files inline).
+  downloadSupplierStatement(
+    id: number,
+    from: string,
+    to: string,
+    format: 'pdf' | 'excel',
+  ): Observable<Blob> {
+    return this.http.get(`${API_BASE}/suppliers/${id}/statement`, {
+      params: { from, to, format },
+      responseType: 'blob',
+    });
+  }
+
   updateShipmentStatus(id: number, ssId: number): Observable<unknown> {
     return this.http.patch(`${API_BASE}/shipments/${id}/status`, { ssId });
   }

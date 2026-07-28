@@ -10,10 +10,26 @@ export const getSupplier = async (id) => {
   return rows[0] ?? null;
 };
 
-export const listShipmentsBySupplier = async (supplierId) => {
+export const listShipmentsBySupplier = async (supplierId, { from, to } = {}) => {
+  const conditions = ['"supplier_id" = $1'];
+  const params = [supplierId];
+
+  if (from) {
+    params.push(from);
+    conditions.push(`"creation_date" >= $${params.length}`);
+  }
+
+  if (to) {
+    params.push(to);
+    conditions.push(`"creation_date" <= $${params.length}`);
+  }
+
+  const orderBy =
+    from || to ? '"creation_date" ASC, "shipment_id" ASC' : '"shipment_id" DESC';
+
   const { rows } = await pool.query(
-    'SELECT * FROM "vw_shipments_detail" WHERE "supplier_id" = $1 ORDER BY "shipment_id" DESC',
-    [supplierId],
+    `SELECT * FROM "vw_shipments_detail" WHERE ${conditions.join(" AND ")} ORDER BY ${orderBy}`,
+    params,
   );
   return rows;
 };

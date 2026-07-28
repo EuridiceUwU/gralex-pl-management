@@ -1,7 +1,15 @@
 import PDFDocument from "pdfkit";
 import ExcelJS from "exceljs";
 
-const COLUMNS = [
+export const STATEMENT_FORMATS = {
+  pdf: { ext: "pdf", mime: "application/pdf" },
+  excel: {
+    ext: "xlsx",
+    mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  },
+};
+
+export const CUSTOMER_STATEMENT_COLUMNS = [
   { key: "date", label: "Fecha", width: 60 },
   { key: "tracking", label: "Guía", width: 85 },
   { key: "carrier", label: "Paquetería", width: 70 },
@@ -9,12 +17,22 @@ const COLUMNS = [
   { key: "sender", label: "Remitente", width: 105 },
   { key: "receiver", label: "Destinatario", width: 105 },
   { key: "weight", label: "Kg", width: 40 },
-  { key: "price", label: "Precio", width: 70 },
+  { key: "price", label: "Precio", width: 70, money: true },
   { key: "status", label: "Estatus", width: 85 },
 ];
 
-// Mirrors customer-detail.component.ts's paqueteria(): shows carrier_other when
-// carrier is "Otro".
+export const SUPPLIER_STATEMENT_COLUMNS = [
+  { key: "date", label: "Fecha", width: 90 },
+  { key: "tracking", label: "Guía", width: 140 },
+  { key: "carrier", label: "Paquetería", width: 110 },
+  { key: "service", label: "Servicio", width: 100 },
+  { key: "weight", label: "Kg", width: 60 },
+  { key: "cost", label: "Costo", width: 110, money: true },
+  { key: "status", label: "Estatus", width: 90 },
+];
+
+// Mirrors customer-detail/supplier-detail component's paqueteria(): shows
+// carrier_other when carrier is "Otro".
 const paqueteria = (sh) => (sh.carrier === "Otro" ? sh.carrier_other || "Otro" : sh.carrier || "—");
 
 // pg returns "date" columns as a Date built from local (not UTC) components, so
@@ -31,7 +49,10 @@ const formatDate = (value) => {
 const formatMoney = (value) =>
   `$${Number(value ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-const rowValues = (sh) => ({
+// Money fields (price/cost) are kept as raw numbers here — buildStatementPdf
+// formats them at render time and buildStatementExcel writes them as native
+// numeric cells (with a currency numFmt) instead of pre-formatted strings.
+export const customerRowValues = (sh) => ({
   date: formatDate(sh.creation_date),
   tracking: sh.tracking_num || "—",
   carrier: paqueteria(sh),
@@ -39,11 +60,21 @@ const rowValues = (sh) => ({
   sender: sh.sender_name || "—",
   receiver: sh.receiver_name || "—",
   weight: sh.weight || "—",
-  price: formatMoney(sh.price),
+  price: Number(sh.price ?? 0),
   status: sh.status_name || "—",
 });
 
-export const buildStatementPdf = ({ customer, shipments, from, to, totalAmount }) =>
+export const supplierRowValues = (sh) => ({
+  date: formatDate(sh.creation_date),
+  tracking: sh.tracking_num || "—",
+  carrier: paqueteria(sh),
+  service: sh.service || "—",
+  weight: sh.weight || "—",
+  cost: Number(sh.cost ?? 0),
+  status: sh.status_name || "—",
+});
+
+export const buildStatementPdf = ({ title, periodFrom, periodTo, columns, rows, totalAmount }) =>
   new Promise((resolve, reject) => {
     const doc = new PDFDocument({ layout: "landscape", margin: 40, size: "A4" });
     const chunks = [];
@@ -52,16 +83,16 @@ export const buildStatementPdf = ({ customer, shipments, from, to, totalAmount }
     doc.on("error", reject);
 
     const left = doc.page.margins.left;
-    const tableWidth = COLUMNS.reduce((sum, col) => sum + col.width, 0);
+    const tableWidth = columns.reduce((sum, col) => sum + col.width, 0);
     const rowHeight = 20;
     const bottom = doc.page.height - doc.page.margins.bottom;
 
-    doc.font("Helvetica-Bold").fontSize(16).text(`Estado de cuenta - ${customer.name}`, left, doc.y);
+    doc.font("Helvetica-Bold").fontSize(16).text(title, left, doc.y);
     doc.moveDown(0.3);
     doc
       .font("Helvetica")
       .fontSize(10)
-      .text(`Periodo: ${formatDate(from)} - ${formatDate(to)}`)
+      .text(`Periodo: ${formatDate(periodFrom)} - ${formatDate(periodTo)}`)
       .text(`Generado: ${formatDate(new Date())}`);
     doc.moveDown(0.8);
 
@@ -70,7 +101,7 @@ export const buildStatementPdf = ({ customer, shipments, from, to, totalAmount }
       doc.rect(left, y, tableWidth, rowHeight).fill("#f1f5f9");
       doc.fillColor("#334155").font("Helvetica-Bold").fontSize(9);
       let x = left;
-      for (const col of COLUMNS) {
+      for (const col of columns) {
         doc.text(col.label, x + 4, y + 6, { width: col.width - 8, ellipsis: true });
         x += col.width;
       }
@@ -78,18 +109,18 @@ export const buildStatementPdf = ({ customer, shipments, from, to, totalAmount }
       doc.y = y + rowHeight;
     };
 
-    const drawRow = (sh) => {
+    const drawRow = (values) => {
       if (doc.y + rowHeight > bottom) {
         doc.addPage();
         doc.y = doc.page.margins.top;
         drawHeader();
       }
       const y = doc.y;
-      const values = rowValues(sh);
       doc.font("Helvetica").fontSize(8);
       let x = left;
-      for (const col of COLUMNS) {
-        doc.text(String(values[col.key]), x + 4, y + 6, { width: col.width - 8, ellipsis: true });
+      for (const col of columns) {
+        const text = col.money ? formatMoney(values[col.key]) : String(values[col.key]);
+        doc.text(text, x + 4, y + 6, { width: col.width - 8, ellipsis: true });
         x += col.width;
       }
       doc
@@ -101,11 +132,11 @@ export const buildStatementPdf = ({ customer, shipments, from, to, totalAmount }
     };
 
     drawHeader();
-    if (shipments.length === 0) {
+    if (rows.length === 0) {
       doc.font("Helvetica").fontSize(9).text("Sin guías en el periodo seleccionado.", left, doc.y + 6);
       doc.y += rowHeight;
     } else {
-      for (const shipment of shipments) drawRow(shipment);
+      for (const values of rows) drawRow(values);
     }
 
     if (doc.y + rowHeight > bottom) {
@@ -121,56 +152,53 @@ export const buildStatementPdf = ({ customer, shipments, from, to, totalAmount }
     doc.end();
   });
 
-export const buildStatementExcel = async ({ customer, shipments, from, to, totalAmount }) => {
+export const buildStatementExcel = async ({ title, periodFrom, periodTo, columns, rows, totalAmount }) => {
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("Estado de cuenta");
+  const lastColumn = columns.length;
 
-  sheet.mergeCells("A1:I1");
-  sheet.getCell("A1").value = `Estado de cuenta - ${customer.name}`;
-  sheet.getCell("A1").font = { bold: true, size: 14 };
+  sheet.mergeCells(1, 1, 1, lastColumn);
+  sheet.getCell(1, 1).value = title;
+  sheet.getCell(1, 1).font = { bold: true, size: 14 };
 
-  sheet.mergeCells("A2:I2");
-  sheet.getCell("A2").value =
-    `Periodo: ${formatDate(from)} - ${formatDate(to)}   |   Generado: ${formatDate(new Date())}`;
-  sheet.getCell("A2").font = { italic: true, size: 10, color: { argb: "FF64748B" } };
+  sheet.mergeCells(2, 1, 2, lastColumn);
+  sheet.getCell(2, 1).value =
+    `Periodo: ${formatDate(periodFrom)} - ${formatDate(periodTo)}   |   Generado: ${formatDate(new Date())}`;
+  sheet.getCell(2, 1).font = { italic: true, size: 10, color: { argb: "FF64748B" } };
 
   sheet.addRow([]);
 
-  const headerRow = sheet.addRow(COLUMNS.map((col) => col.label));
+  const headerRow = sheet.addRow(columns.map((col) => col.label));
   headerRow.eachCell((cell) => {
     cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF334155" } };
     cell.alignment = { vertical: "middle", horizontal: "center" };
   });
 
-  for (const shipment of shipments) {
-    sheet.addRow([
-      formatDate(shipment.creation_date),
-      shipment.tracking_num || "—",
-      paqueteria(shipment),
-      shipment.service || "—",
-      shipment.sender_name || "—",
-      shipment.receiver_name || "—",
-      shipment.weight || "—",
-      Number(shipment.price ?? 0),
-      shipment.status_name || "—",
-    ]);
+  const moneyColumnIndex = columns.findIndex((col) => col.money) + 1;
+
+  for (const values of rows) {
+    sheet.addRow(columns.map((col) => (col.money ? Number(values[col.key] ?? 0) : values[col.key])));
   }
 
   const lastDataRow = sheet.lastRow.number;
 
-  const totalRow = sheet.addRow(["", "", "", "", "", "", "", Number(totalAmount ?? 0), "Total"]);
+  const totalRowValues = new Array(lastColumn).fill("");
+  totalRowValues[lastColumn - 1] = "Total";
+  if (moneyColumnIndex > 0) totalRowValues[moneyColumnIndex - 1] = Number(totalAmount ?? 0);
+  const totalRow = sheet.addRow(totalRowValues);
   totalRow.font = { bold: true };
-  totalRow.getCell(8).numFmt = '"$"#,##0.00';
+  if (moneyColumnIndex > 0) totalRow.getCell(moneyColumnIndex).numFmt = '"$"#,##0.00';
 
-  sheet.getColumn(8).numFmt = '"$"#,##0.00';
-  [12, 18, 14, 14, 24, 24, 8, 14, 16].forEach((width, i) => {
-    sheet.getColumn(i + 1).width = width;
+  const defaultWidths = { date: 12, tracking: 18, carrier: 14, service: 14, sender: 24, receiver: 24, weight: 8, price: 14, cost: 14, status: 16 };
+  columns.forEach((col, i) => {
+    sheet.getColumn(i + 1).width = defaultWidths[col.key] ?? 16;
   });
+  if (moneyColumnIndex > 0) sheet.getColumn(moneyColumnIndex).numFmt = '"$"#,##0.00';
 
   sheet.autoFilter = {
     from: { row: headerRow.number, column: 1 },
-    to: { row: lastDataRow, column: COLUMNS.length },
+    to: { row: lastDataRow, column: lastColumn },
   };
   sheet.views = [{ state: "frozen", ySplit: headerRow.number }];
 

@@ -4,15 +4,13 @@ import * as CustomerModel from "../models/customer.model.js";
 import * as AccountModel from "../models/account.model.js";
 import * as DocumentModel from "../models/document.model.js";
 import { minioClient, bucket } from "../config/minio.js";
-import { buildStatementPdf, buildStatementExcel } from "../services/statement.service.js";
-
-const STATEMENT_FORMATS = {
-  pdf: { ext: "pdf", mime: "application/pdf" },
-  excel: {
-    ext: "xlsx",
-    mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  },
-};
+import {
+  STATEMENT_FORMATS,
+  CUSTOMER_STATEMENT_COLUMNS,
+  customerRowValues,
+  buildStatementPdf,
+  buildStatementExcel,
+} from "../services/statement.service.js";
 
 export const list = async (_req, res) => {
   const customers = await CustomerModel.listCustomers();
@@ -113,10 +111,18 @@ export const generateStatement = async (req, res) => {
   const shipments = await CustomerModel.listShipmentsByCustomer(id, { from, to });
   const totalAmount = shipments.reduce((sum, sh) => sum + Number(sh.price ?? 0), 0);
 
+  const statementArgs = {
+    title: `Estado de cuenta - ${customer.name}`,
+    periodFrom: from,
+    periodTo: to,
+    columns: CUSTOMER_STATEMENT_COLUMNS,
+    rows: shipments.map(customerRowValues),
+    totalAmount,
+  };
   const buffer =
     format === "pdf"
-      ? await buildStatementPdf({ customer, shipments, from, to, totalAmount })
-      : await buildStatementExcel({ customer, shipments, from, to, totalAmount });
+      ? await buildStatementPdf(statementArgs)
+      : await buildStatementExcel(statementArgs);
 
   const minioKey = `reporte/${randomUUID()}.${formatConfig.ext}`;
   await minioClient.putObject(bucket, minioKey, buffer, buffer.length, {
