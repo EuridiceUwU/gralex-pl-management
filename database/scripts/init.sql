@@ -321,6 +321,21 @@ FROM "Users" u
 JOIN "Employees" e ON e."employee_id" = u."employee_id"
 JOIN "Roles" r     ON r."role_id" = e."role_id";
 
+CREATE OR REPLACE VIEW "vw_records_detail" AS
+SELECT r."record_id",
+       r."action",
+       r."table_name",
+       r."record_ref",
+       r."old_values",
+       r."new_values",
+       r."date",
+       r."user_id",
+       u."email" AS "user_email",
+       e."name"  AS "user_name"
+FROM "Records" r
+JOIN "Users" u     ON u."user_id" = r."user_id"
+JOIN "Employees" e ON e."employee_id" = u."employee_id";
+
 -- ============================================================================
 --  Audit trigger. Every sp_*_create/update/delete procedure below sets the
 --  acting user with set_config('app.current_user_id', ..., true) right before

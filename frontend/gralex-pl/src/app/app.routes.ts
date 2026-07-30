@@ -89,6 +89,14 @@ export const routes: Routes = [
             (m) => m.EmployeesComponent,
           ),
       },
+      {
+        path: 'records',
+        canActivate: [adminGuard],
+        loadComponent: () =>
+          import('./features/admin/records/records.component').then(
+            (m) => m.RecordsComponent,
+          ),
+      },
     ],
   },
   { path: '**', redirectTo: '' },

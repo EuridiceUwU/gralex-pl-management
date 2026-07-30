@@ -25,6 +25,7 @@ export class AdminLayoutComponent {
     { path: 'customers', label: 'Clientes', icon: 'users' },
     { path: 'suppliers', label: 'Proveedores', icon: 'truck' },
     { path: 'employees', label: 'Empleados', icon: 'badge', adminOnly: true },
+    { path: 'records', label: 'Historial', icon: 'history', adminOnly: true },
   ];
 
   constructor(

@@ -16,6 +16,7 @@ import customerRoutes from "./routes/customer.routes.js";
 import shipmentRoutes from "./routes/shipment.routes.js";
 import documentRoutes from "./routes/document.routes.js";
 import dashboardRoutes from "./routes/dashboard.routes.js";
+import recordRoutes from "./routes/record.routes.js";
 
 import { notFound } from "./middlewares/notFound.middleware.js";
 import { errorHandler } from "./middlewares/error.middleware.js";
@@ -39,6 +40,7 @@ app.use("/customers", customerRoutes);
 app.use("/shipments", shipmentRoutes);
 app.use("/documents", documentRoutes);
 app.use("/dashboard", dashboardRoutes);
+app.use("/records", recordRoutes);
 
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 

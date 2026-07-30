@@ -134,3 +134,28 @@ export interface OcrResult {
   raw_text: string;
   fields: OcrFields;
 }
+
+export type RecordAction = 'Agregó' | 'Editó' | 'Eliminó';
+
+export interface AuditRecord {
+  record_id: number;
+  action: RecordAction;
+  table_name: string;
+  record_ref: number;
+  old_values: Record<string, unknown> | null;
+  new_values: Record<string, unknown> | null;
+  date: string;
+  user_id: number;
+  user_email: string;
+  user_name: string;
+}
+
+export interface RecordFilters {
+  from?: string;
+  to?: string;
+  action?: RecordAction;
+  tableName?: string;
+  userId?: number;
+  page?: number;
+  pageSize?: number;
+}

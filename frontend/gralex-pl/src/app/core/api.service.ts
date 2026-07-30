@@ -5,14 +5,28 @@ import { Observable } from 'rxjs';
 import { API_BASE } from './api.config';
 import {
   Account,
+  AuditRecord,
   Customer,
   DashboardResponse,
   Employee,
   OcrResult,
+  RecordFilters,
   Shipment,
   Supplier,
   SupplierWithBalance,
 } from './models';
+
+// Drops undefined/empty filters so HttpClient doesn't send them as literal
+// "undefined" query-string values.
+const toHttpParams = (filters: object): Record<string, string> => {
+  const params: Record<string, string> = {};
+  for (const [key, value] of Object.entries(filters as Record<string, unknown>)) {
+    if (value !== undefined && value !== null && value !== '') {
+      params[key] = String(value);
+    }
+  }
+  return params;
+};
 
 /**
  * Thin wrapper over the backend REST API. Each method maps to one endpoint.
@@ -227,5 +241,29 @@ export class ApiService {
 
   confirmShipmentFromGuide(form: FormData): Observable<unknown> {
     return this.http.post(`${API_BASE}/documents/confirm-shipment`, form);
+  }
+
+  // Records (historial de cambios / auditoría) — admin only
+  records(
+    filters: RecordFilters,
+  ): Observable<{ records: AuditRecord[]; total: number; page: number; pageSize: number }> {
+    return this.http.get<{ records: AuditRecord[]; total: number; page: number; pageSize: number }>(
+      `${API_BASE}/records`,
+      { params: toHttpParams(filters) },
+    );
+  }
+
+  recordTables(): Observable<{ tables: string[] }> {
+    return this.http.get<{ tables: string[] }>(`${API_BASE}/records/tables`);
+  }
+
+  downloadRecordsExport(
+    filters: Omit<RecordFilters, 'page' | 'pageSize'>,
+    format: 'pdf' | 'excel',
+  ): Observable<Blob> {
+    return this.http.get(`${API_BASE}/records/export`, {
+      params: toHttpParams({ ...filters, format }),
+      responseType: 'blob',
+    });
   }
 }
