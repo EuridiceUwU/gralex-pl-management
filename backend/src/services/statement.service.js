@@ -31,6 +31,33 @@ export const SUPPLIER_STATEMENT_COLUMNS = [
   { key: "status", label: "Estatus", width: 90 },
 ];
 
+const TABLE_LABELS = {
+  Users: "Usuarios",
+  Roles: "Roles",
+  Employees: "Empleados",
+  Suppliers: "Proveedores",
+  Customers: "Clientes",
+  Shipments: "Guías",
+  Minio_documents: "Documentos",
+  Accounts: "Estados de cuenta",
+};
+
+export const RECORD_STATEMENT_COLUMNS = [
+  { key: "date", label: "Fecha", width: 90 },
+  { key: "user", label: "Usuario", width: 130 },
+  { key: "action", label: "Acción", width: 70 },
+  { key: "table", label: "Módulo", width: 90 },
+  { key: "recordRef", label: "Referencia", width: 70 },
+];
+
+export const recordRowValues = (r) => ({
+  date: formatDate(r.date),
+  user: r.user_name || r.user_email || "—",
+  action: r.action,
+  table: TABLE_LABELS[r.table_name] ?? r.table_name,
+  recordRef: r.record_ref,
+});
+
 // Mirrors customer-detail/supplier-detail component's paqueteria(): shows
 // carrier_other when carrier is "Otro".
 const paqueteria = (sh) => (sh.carrier === "Otro" ? sh.carrier_other || "Otro" : sh.carrier || "—");
@@ -133,21 +160,25 @@ export const buildStatementPdf = ({ title, periodFrom, periodTo, columns, rows, 
 
     drawHeader();
     if (rows.length === 0) {
-      doc.font("Helvetica").fontSize(9).text("Sin guías en el periodo seleccionado.", left, doc.y + 6);
+      doc.font("Helvetica").fontSize(9).text("Sin registros en el periodo seleccionado.", left, doc.y + 6);
       doc.y += rowHeight;
     } else {
       for (const values of rows) drawRow(values);
     }
 
-    if (doc.y + rowHeight > bottom) {
-      doc.addPage();
-      doc.y = doc.page.margins.top;
+    // Only shipment-based statements (customers/suppliers) carry a money column;
+    // reports like the audit log export have nothing to total.
+    if (columns.some((col) => col.money)) {
+      if (doc.y + rowHeight > bottom) {
+        doc.addPage();
+        doc.y = doc.page.margins.top;
+      }
+      doc.moveDown(0.5);
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(11)
+        .text(`Total: ${formatMoney(totalAmount)}`, left, doc.y, { width: tableWidth, align: "right" });
     }
-    doc.moveDown(0.5);
-    doc
-      .font("Helvetica-Bold")
-      .fontSize(11)
-      .text(`Total: ${formatMoney(totalAmount)}`, left, doc.y, { width: tableWidth, align: "right" });
 
     doc.end();
   });
@@ -183,14 +214,18 @@ export const buildStatementExcel = async ({ title, periodFrom, periodTo, columns
 
   const lastDataRow = sheet.lastRow.number;
 
-  const totalRowValues = new Array(lastColumn).fill("");
-  totalRowValues[lastColumn - 1] = "Total";
-  if (moneyColumnIndex > 0) totalRowValues[moneyColumnIndex - 1] = Number(totalAmount ?? 0);
-  const totalRow = sheet.addRow(totalRowValues);
-  totalRow.font = { bold: true };
-  if (moneyColumnIndex > 0) totalRow.getCell(moneyColumnIndex).numFmt = '"$"#,##0.00';
+  // Only shipment-based statements (customers/suppliers) carry a money column;
+  // reports like the audit log export have nothing to total.
+  if (moneyColumnIndex > 0) {
+    const totalRowValues = new Array(lastColumn).fill("");
+    totalRowValues[lastColumn - 1] = "Total";
+    totalRowValues[moneyColumnIndex - 1] = Number(totalAmount ?? 0);
+    const totalRow = sheet.addRow(totalRowValues);
+    totalRow.font = { bold: true };
+    totalRow.getCell(moneyColumnIndex).numFmt = '"$"#,##0.00';
+  }
 
-  const defaultWidths = { date: 12, tracking: 18, carrier: 14, service: 14, sender: 24, receiver: 24, weight: 8, price: 14, cost: 14, status: 16 };
+  const defaultWidths = { date: 12, tracking: 18, carrier: 14, service: 14, sender: 24, receiver: 24, weight: 8, price: 14, cost: 14, status: 16, user: 24, action: 12, table: 16, recordRef: 12 };
   columns.forEach((col, i) => {
     sheet.getColumn(i + 1).width = defaultWidths[col.key] ?? 16;
   });
