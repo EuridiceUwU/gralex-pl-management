@@ -64,7 +64,7 @@ router.post("/upload", upload.single("file"), DocumentController.upload);
  * @swagger
  * /documents/ocr:
  *   post:
- *     summary: Leer un PDF/imagen con el microservicio OCR (texto crudo)
+ *     summary: Servicio para leer un PDF/imagen y extraer su información
  *     tags: [Documents]
  *     requestBody:
  *       required: true
@@ -77,9 +77,15 @@ router.post("/upload", upload.single("file"), DocumentController.upload);
  *               file:
  *                 type: string
  *                 format: binary
+ *                 description: PDF o imagen (png/jpeg/webp/tiff) de la guía
  *     responses:
- *       200: { description: Texto extraído y campos (vacíos por ahora) }
- *       502: { description: El servicio OCR no respondió }
+ *       200:
+ *         description: Texto extraído y campos detectados por el parser de guías
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/OcrResult' }
+ *       400: { description: Archivo no proporcionado }
+ *       502: { description: El servicio OCR no respondió (ver 'detail' en la respuesta) }
  */
 router.post("/ocr", upload.single("file"), DocumentController.ocr);
 

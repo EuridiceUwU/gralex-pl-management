@@ -96,8 +96,7 @@ export const getUrl = async (req, res) => {
 
 /**
  * Proxies an uploaded file to the Python OCR microservice and returns its
- * extracted text. The field mapping is not implemented yet (see /ocr/parser.py);
- * `fields` comes back empty and ready to be filled later.
+ * extracted text plus the fields detected by /ocr/parser.py.
  */
 export const ocr = async (req, res) => {
   if (!req.file) {

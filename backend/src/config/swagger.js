@@ -6,7 +6,8 @@ const options = {
     info: {
       title: "Gralex Management API",
       version: "0.1.0",
-      description: "API documentation for the Gralex Management backend",
+      description:
+        "API documentation for the Gralex Management backend. El microservicio OCR (FastAPI) tiene su propia documentación en /ocr/docs.",
     },
     servers: [
       {
@@ -17,6 +18,19 @@ const options = {
         url: "http://localhost:3000",
         description: "Backend directo (sin nginx)",
       },
+    ],
+    tags: [
+      { name: "Auth", description: "Autenticación y sesión" },
+      { name: "Employees", description: "Gestión de empleados y usuarios" },
+      { name: "Roles", description: "Gestión de roles / puestos" },
+      { name: "Customers", description: "Gestión de clientes" },
+      { name: "Suppliers", description: "Gestión de proveedores (paqueterías)" },
+      { name: "Shipments", description: "Gestión de guías / envíos" },
+      { name: "Documents", description: "Subida de guías a MinIO y lectura por OCR" },
+      { name: "Dashboard", description: "Métricas y gráficas del panel" },
+      { name: "Health", description: "System health check" },
+      { name: "Metrics", description: "System metrics" },
+      { name: "Database", description: "Database health and operations" },
     ],
     components: {
       securitySchemes: {
@@ -132,6 +146,44 @@ const options = {
             start_period: { type: "string", format: "date", example: "2026-06-01" },
             end_period: { type: "string", format: "date", example: "2026-06-30" },
             total_amount: { type: "number", example: 4500.75 },
+          },
+        },
+        OcrFields: {
+          type: "object",
+          description: "Campos detectados automáticamente a partir del texto OCR (parser.py); vienen null si no se detectan.",
+          properties: {
+            carrier: {
+              type: "string",
+              nullable: true,
+              enum: ["Fedex", "DHL", "Estafeta", "Paquetexpress", "Otro"],
+              example: "DHL",
+            },
+            tracking_num: { type: "string", nullable: true, example: "1234567890" },
+            sender_name: { type: "string", nullable: true, example: "Gralex" },
+            receiver_name: { type: "string", nullable: true, example: "María López" },
+            sender_cp: { type: "string", nullable: true, example: "94500" },
+            receiver_cp: { type: "string", nullable: true, example: "06000" },
+            weight: { type: "string", nullable: true, example: "2.5" },
+            service: {
+              type: "string",
+              nullable: true,
+              enum: ["Express", "Terrestre"],
+              example: "Express",
+            },
+            creation_date: { type: "string", format: "date", nullable: true, example: "2026-06-24" },
+            supplier: { type: "string", nullable: true, example: "DHL" },
+            cost: { type: "string", nullable: true, example: null },
+          },
+        },
+        OcrResult: {
+          type: "object",
+          description: "Respuesta del backend al proxyear el archivo al microservicio OCR (Python/FastAPI) en /ocr/extract.",
+          properties: {
+            ok: { type: "boolean", example: true },
+            filename: { type: "string", example: "guia-dhl.pdf" },
+            content_type: { type: "string", example: "application/pdf" },
+            raw_text: { type: "string", description: "Texto crudo extraído por Tesseract/OCR" },
+            fields: { $ref: "#/components/schemas/OcrFields" },
           },
         },
         ErrorResponse: {
